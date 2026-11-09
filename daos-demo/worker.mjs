@@ -56,7 +56,8 @@ function validEvent(event) {
 
 const intakeSql = `SELECT intake.rowid AS number, intake.*, orders.rowid AS delivery_number,
   orders.revision AS dispatch_revision,
-  EXISTS (SELECT 1 FROM events WHERE job_key = intake.work_date || '/' || intake.id AND mode IN ('daos',intake.province || '|daos') AND state = 'delivered') AS delivered
+  EXISTS (SELECT 1 FROM events WHERE job_key = intake.work_date || '/' || intake.id AND mode IN ('daos',intake.province || '|daos') AND state = 'delivered') AS delivered,
+  EXISTS (SELECT 1 FROM events WHERE job_key = intake.work_date || '/' || intake.id AND mode IN ('baseline',intake.province || '|baseline') AND state = 'delivered') AS baseline_delivered
   FROM intake LEFT JOIN orders ON intake.id = orders.id`;
 const DEMO_DATES=['2026-11-09','2026-11-10','2026-11-11','2026-11-12','2026-11-13'];
 const INITIAL_DATES=DEMO_DATES.slice(0,3);

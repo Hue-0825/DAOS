@@ -5,6 +5,8 @@ let province='경상남도';
 let selectedGroup;
 let data;
 let busy=false;
+let refreshController;
+let refreshFailed=false;
 function render(){
   if(!data)return;
   if(data.clock)$('shared-clock').textContent=`시연 시간 · ${data.clock.date} ${data.clock.time} · 한국시간`;
@@ -54,18 +56,25 @@ function render(){
   $('reset-hint').textContent=!data.online?'서버를 복구하면 배차를 리셋할 수 있습니다.'
     :count?`확정 ${count}건과 해당 날짜의 시연 기록을 초기화합니다.`:'선택한 날짜에 확정된 배차가 없습니다.';
   $('orders').innerHTML=orders.map(order=>{
-    const status=order.delivered?'배송 완료':order.dispatch_revision?`배차 확정 · DAOS-${String(order.delivery_number).padStart(3,'0')}`:order.region?'배차 대기':'주소 확인 필요';
+    const completed=order.delivered||order.baseline_delivered;
+    const mode=order.delivered?(order.baseline_delivered?'DAOS · 기존 방식':'DAOS'):'기존 방식';
+    const status=completed?`배송 완료<small>${mode}</small>`:order.dispatch_revision
+      ?`배차 확정 · DAOS-${String(order.delivery_number).padStart(3,'0')}`:order.region?'배차 대기':'주소 확인 필요';
     return `<tr><td>${order.number}</td><td>${esc(order.work_date)}<small>${slots[order.segment]??'시간 미정'}</small></td>
       <td>${esc(order.province)} ${esc(order.city)} ${esc(order.address)}</td><td>${esc(order.product)} · ${order.quantity}개</td><td>${status}</td></tr>`;
   }).join('')||'<tr><td colspan="5" class="empty-sheet">이 허브에 접수된 주문이 없습니다.</td></tr>';
 }
 async function refresh(){
+  refreshController?.abort();
+  const controller=new AbortController();
+  refreshController=controller;
+  const timeout=setTimeout(()=>controller.abort(),4500);
   const selected=province;
   try{
-    const response=await fetch(`/api/hub/orders?province=${encodeURIComponent(selected)}`,{cache:'no-store'});
+    const response=await fetch(`/api/hub/orders?province=${encodeURIComponent(selected)}`,{cache:'no-store',signal:controller.signal});
     if(!response.ok)throw Error();
     const next=await response.json();
-    if(selected!==province)return;
+    if(refreshController!==controller||selected!==province)return;
     if(!$('province').options.length){$('province').replaceChildren(...next.provinces.map(name=>new Option(name,name)));$('province').value=province}
     const dates=$('dispatch-date');
     if([...dates.options].map(option=>option.value).join()!==next.dates.join()){
@@ -74,8 +83,20 @@ async function refresh(){
       if(next.dates.includes(previous))dates.value=previous;
     }
     data=next;
+    if(refreshFailed)$('notice').textContent='';
+    refreshFailed=false;
     render();
-  }catch{$('reset').disabled=true;$('notice').textContent='허브 주문을 불러오지 못했습니다.';$('server-state').textContent='서버 연결 끊김';$('server-state').dataset.offline='true'}
+  }catch{
+    if(refreshController!==controller||selected!==province)return;
+    $('reset').disabled=true;
+    refreshFailed=true;
+    $('notice').textContent='허브 주문을 불러오지 못했습니다.';
+    $('server-state').textContent='서버 연결 끊김';
+    $('server-state').dataset.offline='true';
+  }finally{
+    clearTimeout(timeout);
+    if(refreshController===controller)refreshController=null;
+  }
 }
 async function post(path,body,message){
   if(busy)return;
@@ -111,5 +132,12 @@ $('reset').onclick=()=>{
   if(!confirm(`${date} ${province} 배차와 시연 배송 기록을 초기화할까요?`))return;
   void post('/api/hub/cancel',{province,date},result=>`${result.count}건 배차를 취소했습니다. 기사 앱은 연결 후 새 작업표를 받습니다.`);
 };
+function refreshVisible(){
+  if(!busy&&!refreshController&&!document.hidden)void refresh();
+}
 await refresh();
-setInterval(()=>{if(!busy)void refresh()},3000);
+setInterval(refreshVisible,1000);
+document.addEventListener('visibilitychange',refreshVisible);
+window.addEventListener('focus',refreshVisible);
+window.addEventListener('pageshow',refreshVisible);
+window.addEventListener('online',refreshVisible);

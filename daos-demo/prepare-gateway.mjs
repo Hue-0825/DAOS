@@ -14,7 +14,7 @@ for(const file of await readdir(new URL(`${role}/`,import.meta.url))){
 }
 if(role==='hub'){
   const maps=await readdir(new URL('driver/',import.meta.url));
-  for(const file of maps.filter(name=>name==='campus.svg'||name.startsWith('region-'))) {
+  for(const file of maps.filter(name=>name.endsWith('.svg')&&name!=='icon.svg')) {
     assets[file]=await readFile(new URL(`driver/${file}`,import.meta.url),'utf8');
   }
 }

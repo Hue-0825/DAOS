@@ -9,6 +9,10 @@ for (const [table, migration] of [['control','0000_dispatch'],['intake','0001_in
     sqlite.exec(await readFile(`drizzle/${migration}.sql`, 'utf8'));
   }
 }
+if (sqlite.prepare('PRAGMA user_version').get().user_version < 4) {
+  sqlite.exec(await readFile('drizzle/0004_november_demo.sql','utf8'));
+  sqlite.exec('PRAGMA user_version = 4');
+}
 function statement(sql, args) {
   return {
     execute() {

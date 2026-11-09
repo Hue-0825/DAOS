@@ -1,9 +1,9 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DAOS 메인 서버</title><link rel="stylesheet" href="style.css?v=17"><script type="module" src="central.mjs?v=17"></script></head>
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DAOS 메인 서버</title><link rel="stylesheet" href="style.css?v=17"><script type="module" src="central.mjs?v=18"></script></head>
 <body><header><strong>DAOS 메인 서버</strong><span id="server-state" class="server-state" role="status">서버 확인 중</span></header><main>
 <div class="intro"><span>쇼핑몰 → 시·도 허브</span><h1>주문 수집·분류</h1><p>쇼핑몰에서 수신한 원본 주문과 담당 허브를 확인합니다.</p></div>
 <section class="card"><div class="tabs" aria-label="주문 보기"><button id="all" type="button" aria-pressed="true">모든 정보</button><button id="regional" type="button" aria-pressed="false">지역별 정리</button></div>
 <div id="regional-panel" class="toolbar" hidden><label>시·도 허브<select id="province"></select></label><p id="region-note"></p></div>
-<label class="history">배송일<select id="history-date"><option value="all">모든 날짜</option></select></label>
+<label class="history">배송일<select id="history-date"><option value="all">11월 9일–11일 전체</option></select></label>
 <p id="count" role="status"></p>
 <div class="sheet-scroll" role="region" aria-label="메인 서버 주문 원장" tabindex="0"><table><thead><tr><th>접수 번호</th><th>접수·배송일</th><th>고객</th><th>상품</th><th>주소·인계</th><th>담당 허브</th><th>상태</th></tr></thead><tbody id="orders"></tbody></table></div>
 </section></main></body></html>

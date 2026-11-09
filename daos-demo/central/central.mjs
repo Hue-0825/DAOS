@@ -29,8 +29,7 @@ async function refresh(){
     data=await response.json();
     if(!$('province').options.length){$('province').replaceChildren(...data.provinces.map(name=>new Option(name,name)));$('province').value='경상남도'}
     if ($('history-date').options.length===1) {
-      const labels=['오늘','내일','모레'];
-      $('history-date').append(...data.historyDates.map((date,i)=>new Option(`${labels[i]} · ${date}`,date)));
+      $('history-date').append(...data.historyDates.map(date=>new Option(date,date)));
     }
     render();
   }catch{$('count').textContent='메인 서버 주문을 불러오지 못했습니다.';$('server-state').textContent='메인 서버 연결 끊김';$('server-state').dataset.offline='true'}

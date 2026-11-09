@@ -55,8 +55,9 @@ const intakeSql = `SELECT intake.rowid AS number, intake.*, orders.rowid AS deli
   orders.revision AS dispatch_revision,
   EXISTS (SELECT 1 FROM events WHERE job_key = intake.work_date || '/' || intake.id AND mode IN ('daos',intake.province || '|daos') AND state = 'delivered') AS delivered
   FROM intake LEFT JOIN orders ON intake.id = orders.id`;
-const dates=()=>[dateKey(),dateKey(1),dateKey(2)];
-const windowDates=()=>[dateKey(),dateKey(2)];
+const DEMO_DATES=['2026-11-09','2026-11-10','2026-11-11'];
+const dates=()=>DEMO_DATES;
+const windowDates=()=>[DEMO_DATES[0],DEMO_DATES.at(-1)];
 const isText = (value, limit) => typeof value === 'string' && value.trim() && value.length <= limit;
 const compact = value => value.replace(/\s+/g,'');
 function routeAddress(province, city, address) {
@@ -95,7 +96,10 @@ async function intakeApi(request, db, path) {
     return json({ number:result.meta.last_row_id ?? result.meta.lastInsertRowid, province:item.province },201);
   }
   if (path === '/api/central/orders' && request.method === 'GET') {
-    const [result,control]=await db.batch([run(db,`${intakeSql} ORDER BY intake.work_date DESC,intake.created_at DESC,intake.rowid DESC`),run(db,controlSql)]);
+    const [result,control]=await db.batch([
+      run(db,`${intakeSql} WHERE intake.work_date BETWEEN ? AND ? ORDER BY intake.work_date,intake.created_at DESC,intake.rowid DESC`,...windowDates()),
+      run(db,controlSql),
+    ]);
     return json({ orders:result.results, provinces:routing.provinces, regions:routing.regions,
       online:Boolean(control.results[0].online), historyDates:dates() });
   }

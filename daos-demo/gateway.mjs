@@ -42,7 +42,7 @@ createServer(async (request,response) => {
     const file=url.pathname.slice(root.length)||'index.html';
     const extension=file.split('.').at(-1);
     if (!/^[a-z0-9.-]+$/i.test(file) || !Object.hasOwn(media,extension)) return response.writeHead(404).end();
-    const folder=role==='hub'&&(file==='campus.svg'||/^region-.*\.svg$/.test(file))?'driver':role;
+    const folder=role==='hub'&&extension==='svg'?'driver':role;
     const body=await readFile(join(folder,file));
     response.writeHead(200,{'Content-Type':`${media[extension]}; charset=utf-8`,'Cache-Control':'no-cache'});
     response.end(request.method==='HEAD'?null:body);

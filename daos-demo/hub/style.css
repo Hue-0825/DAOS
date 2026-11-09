@@ -42,3 +42,10 @@ td strong{overflow-wrap:anywhere}
 #region-preview figcaption{font-size:12px;margin-top:5px;color:#5b546e}
 
 .reset-title{margin-top:18px}.cancel-button{background:#fff3ee;color:#8b3921;border-color:#e8b2a3}
+.reset-toolbar{justify-content:flex-start;align-items:end}
+.reset-toolbar p{margin:0 0 7px}
+.group small{display:block;margin-top:4px;overflow-wrap:anywhere}
+.group .addresses{color:#3c3259}
+.group-actions{display:flex;flex-direction:column;gap:6px}
+.group-actions [aria-pressed="true"]{background:#eeeaff}
+#groups,#dispatches{margin-top:12px}

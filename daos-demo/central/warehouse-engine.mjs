@@ -36,11 +36,16 @@ function pathTo(start, end, blocked) {
   return [];
 }
 
+export const OUTAGE_ALERT_MS = 2000;
+
 export class Warehouse {
   constructor() {
     this.jobs = new Map();
     this.clock = null;
     this.mode = 'connecting';
+    this.daosEnabled = true;
+    this.outageAt = null;
+    this.reportedPhase = null;
     this.epoch = null;
     this.events = [];
     this.pending = 0;
@@ -96,10 +101,35 @@ export class Warehouse {
       this.note('관제',count?`연결 복구 · 로컬 공정 기록 ${count}건을 화면에 합쳤습니다.`:'DAOS 메인 서버에서 작업표를 받았습니다.');
     }
   }
-  disconnect() {
+  setDaos(enabled) {
+    if (this.daosEnabled === enabled) return;
+    this.daosEnabled = enabled;
+    this.note('관제',`DAOS ${enabled?'ON · 백업 운전 사용':'OFF · 기존 방식으로 전환'}`);
+  }
+  disconnect(now=Date.now()) {
     if (this.mode === 'offline') return;
     this.mode = 'offline';
-    this.note('관제','서버 연결 끊김 · 저장된 당일 작업으로 전환합니다.');
+    this.outageAt = now;
+    this.reportedPhase = null;
+    this.note('관제','서버 연결 끊김 · 로봇 20대에 장애 경고를 표시합니다.');
+  }
+  offlinePhase(now=Date.now()) {
+    if (this.mode !== 'offline') return null;
+    if (now - this.outageAt < OUTAGE_ALERT_MS) return 'alert';
+    if (!this.daosEnabled) return 'stopped';
+    if ([...this.jobs.values()].some(job=>this.eligible(job))) return 'backup';
+    return 'waiting';
+  }
+  updateOutage(now) {
+    const phase = this.offlinePhase(now);
+    const messages = {
+      stopped:'DAOS OFF · 서버가 복구될 때까지 로봇 공정을 정지합니다.',
+      backup:'DAOS 가동 · 미리 저장한 당일 작업표로 로봇 운전을 이어갑니다.',
+      waiting:'DAOS 대기 · 지금 시작할 수 있는 백업 작업표가 없습니다.',
+    };
+    if (phase === this.reportedPhase || !messages[phase]) return;
+    this.reportedPhase = phase;
+    this.note('관제',messages[phase]);
   }
   eligible(job) {
     return !job.withdrawn && job.date === this.clock?.date && job.segment <= timeSlot(this.clock.time);
@@ -122,8 +152,8 @@ export class Warehouse {
     if (stage === 4) return this.station(2,job);
     return stage < 2 ? this.station(stage,job) : null;
   }
-  tick(dt) {
-    if (this.mode !== 'online' && this.mode !== 'offline') return;
+  tick(dt,now=Date.now()) {
+    if (this.mode !== 'online' && this.offlinePhase(now) !== 'backup') return;
     const occupied = new Set(this.robots.flatMap(robot => [key(robot.cell),...(robot.next?[key(robot.next)]:[])]));
     const reserved = new Set(this.robots.flatMap(robot=>robot.stations));
     for (const robot of this.robots) {

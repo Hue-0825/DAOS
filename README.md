@@ -4,10 +4,23 @@
 
 ## 시작하기
 
-- [공유용 공개 시연](https://daos-logistics.ryker6365.chatgpt.site/)에서 가상 배송으로 기존 방식과 DAOS의 장애 대응을 비교할 수 있습니다.
+- [공유용 공개 시연](https://daos-logistics.ryker6365.chatgpt.site/)에서 역할별 운영 화면과 장애 시연 순서를 확인할 수 있습니다.
 - [배송 운영 데모 안내](daos-demo/README.md)에서 배포 주소, 실행 방법, 주문·배차·장애 시연 순서를 확인할 수 있습니다. 운영 화면에는 접근 권한이 필요합니다.
 - [Android 설치용 APK](daos-demo/downloads/DAOS-Driver.apk) · [iPhone Xcode 프로젝트](daos-demo/mobile/ios/). iPhone 설치에는 Apple 서명이 필요합니다.
 - [프로젝트 설계서](docs/PROJECT_PLAN.md)에서 로봇, 물류센터, 복구 검증의 계획을 확인할 수 있습니다.
+
+## 배포 주소
+
+| 화면 | 접속 링크 |
+|---|---|
+| 통합 시연 사이트 | [DAOS 통합 사이트](https://daos-logistics.ryker6365.chatgpt.site/) |
+| 스토어 | [DAOS 스토어](https://daos-shop-demo.ryker6365.chatgpt.site/) |
+| 메인 서버 | [메인 관제센터](https://daos-dispatch-demo.ryker6365.chatgpt.site/central/) |
+| 지역 허브 | [지역 허브](https://daos-hub-demo.ryker6365.chatgpt.site/) |
+| 기사 앱 | [기사 앱 웹 화면](https://daos-phone-driver.ryker6365.chatgpt.site/driver/) |
+| 물류센터 | [로봇 관제실](https://daos-dispatch-demo.ryker6365.chatgpt.site/central/warehouse.html) |
+
+처음 참여하는 분은 역할별 공유 링크로 로그인해 접속을 활성화해 주세요. 로봇 관제실은 메인 관제센터 권한을 사용합니다.
 
 ## 구현 범위
 
@@ -39,4 +52,4 @@ tar -xzf assets.tar.gz
 node split.mjs
 ```
 
-공개 시연은 가상 배송으로 동작합니다. 실제 장비 적용과 성능 검증은 프로젝트 설계서에서 다룹니다.
+로봇 관제실에서 DAOS ON/OFF를 선택하고 서버 연결을 끊으면 로봇마다 장애 경고가 표시됩니다. 경고 후 ON은 백업 작업표로 계속 운행하고, OFF는 복구까지 정지합니다. DAOS 설정은 해당 탭에 적용되며 서버 연결 상태는 메인 관제센터와 공유합니다. 실제 장비 적용과 성능 검증은 프로젝트 설계서에서 다룹니다.

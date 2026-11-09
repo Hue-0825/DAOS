@@ -1,4 +1,4 @@
-import {PARKING,RACKS,SIZE,STAGES} from './warehouse-engine.mjs';
+import {PARKING,RACKS,SIZE,STAGES} from './warehouse-engine.mjs?v=2';
 
 const W=1320,H=700;
 const project=(x,y,z=0)=>[540+(x-y)*20,69+(x+y)*10.7-z];
@@ -153,6 +153,22 @@ export function createScene(canvas){
       text(ctx,robot.id,sx,sy-22,top,9,'center');
     }
   }
+  const badges={
+    alert:['!','#ffd069','#422400',22],
+    backup:['DAOS','#a8f0c7','#143e2b',39],
+    stopped:['정지','#ffb5ac','#511f19',31],
+    waiting:['대기','#f6d38a','#3f2a10',31],
+  };
+  function drawStatus(robot,badge){
+    const [label,fill,ink,width]=badge;
+    const [x,y]=project(...robot.position);
+    ctx.fillStyle=fill;
+    ctx.beginPath();
+    ctx.roundRect(x-width/2,y-52,width,18,4);
+    ctx.fill();
+    polygon(ctx,[[x-4,y-35],[x+4,y-35],[x,y-29]],fill);
+    text(ctx,label,x,y-39,ink,label==='!'?15:10,'center');
+  }
   function draw(sim,selected){
     lastFrame=[sim,selected];
     ctx.clearRect(0,0,W,H);
@@ -167,6 +183,8 @@ export function createScene(canvas){
       .sort((a,b)=>a.depth-b.depth);
     for(const object of sorted)object.draw(ctx);
     for(const label of signs)sign(ctx,...label);
+    const badge=badges[sim.offlinePhase()];
+    if(badge)for(const robot of sim.robots)drawStatus(robot,badge);
   }
   function pick(event,robots){
     const rect=canvas.getBoundingClientRect();

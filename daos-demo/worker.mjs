@@ -97,7 +97,7 @@ async function demoOrders() {
     const detail=routing.regions[region];
     const stops=Object.keys(places).filter(key=>places[key].region===region&&(province===DEFAULT_PROVINCE||places[key].anchor)&&places[key].sample!==false).slice(0,4);
     const visit=province===DEFAULT_PROVINCE?Math.floor(index/3):Math.floor((index-20)/national.length);
-    const destination=stops[(visit+day)%stops.length];
+    const destination=day===0&&index===14?'yssangyong':stops[(visit+day)%stops.length];
     const id=await sampleId(date,`history-v1/${index}`);
     const created=new Date(Date.parse(`${date}T00:00:00+09:00`)+(index+1)*60000).toISOString();
     return [id,created,date,province,detail.city,places[destination].label,`시연 고객 ${String(day*100+index+1).padStart(3,'0')}`,

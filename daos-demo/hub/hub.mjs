@@ -26,10 +26,7 @@ function render(){
     const caption=`${province} · ${route.city} · ${route.name} · ${slots[selected.segment]}`;
     $('hub-map').alt=caption;
     $('hub-map-caption').textContent=caption;
-    const points=[...new Set(selected.rows.map(order=>order.destination))]
-      .map(id=>data.locations?.[id]).filter(place=>Number.isFinite(place?.x)&&Number.isFinite(place?.y));
-    $('hub-pins').innerHTML=points.map(({x,y,label},i)=>`<span class="hub-pin" style="left:${x}%;top:${y}%" title="${esc(label)}">${i+1}</span>`).join('');
-    $('map-stops').innerHTML=points.map(({label})=>`<li>${esc(label)}</li>`).join('');
+
   }
   $('server-state').dataset.offline=String(!data.online);
   $('server-state').textContent=data.online?'서버 연결됨':'기사 서버 연결 차단 중';
@@ -71,7 +68,12 @@ async function refresh(){
     const next=await response.json();
     if(selected!==province)return;
     if(!$('province').options.length){$('province').replaceChildren(...next.provinces.map(name=>new Option(name,name)));$('province').value=province}
-    if(!$('dispatch-date').options.length)$('dispatch-date').replaceChildren(...next.dates.map(date=>new Option(date,date)));
+    const dates=$('dispatch-date');
+    if([...dates.options].map(option=>option.value).join()!==next.dates.join()){
+      const previous=dates.value;
+      dates.replaceChildren(...next.dates.map(date=>new Option(date,date)));
+      if(next.dates.includes(previous))dates.value=previous;
+    }
     data=next;
     render();
   }catch{$('reset').disabled=true;$('notice').textContent='허브 주문을 불러오지 못했습니다.';$('server-state').textContent='서버 연결 끊김';$('server-state').dataset.offline='true'}

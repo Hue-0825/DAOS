@@ -21,6 +21,12 @@ if (sqlite.prepare('PRAGMA user_version').get().user_version < 6) {
   const migration=await readFile('drizzle/0006_demo_routes.sql','utf8');
   sqlite.exec(`BEGIN; ${migration} PRAGMA user_version = 6; COMMIT;`);
 }
+for (const [version,filename] of [[7,'0007_hub_release'],[8,'0008_five_day_demo']]) {
+  if (sqlite.prepare('PRAGMA user_version').get().user_version < version) {
+    const migration=await readFile(`drizzle/${filename}.sql`,'utf8');
+    sqlite.exec(`BEGIN; ${migration} PRAGMA user_version = ${version}; COMMIT;`);
+  }
+}
 function statement(sql, args) {
   return {
     execute() {

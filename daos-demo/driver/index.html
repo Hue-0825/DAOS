@@ -4,17 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#181637">
-<meta name="description" content="창원대학교 캠퍼스에서 서버 장애 중에도 작업을 이어가는 DAOS 기사용 데모">
-<title>DAOS Driver · 창원대 캠퍼스</title>
+<meta name="description" content="서버 장애 중에도 작업을 이어가는 DAOS 지역 허브 기사 앱">
+<title>DAOS Driver · 지역 허브</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="manifest" href="app.webmanifest">
-<link rel="stylesheet" href="style.css?v=19">
-<script type="module" src="app.mjs?v=19"></script>
+<link rel="stylesheet" href="style.css?v=20">
+<script type="module" src="app.mjs?v=20"></script>
 </head>
 <body>
 <header class="top">
   <a class="brand" href="./"><img src="icon.svg" alt="" width="40" height="40"><span>DAOS <strong>Driver</strong><small>기사용 작업 앱</small></span></a>
-  <div class="top-right"><span class="demo">캠퍼스 데모</span><span id="connection" class="connection" role="status"></span><button id="settings" class="settings secondary" type="button" aria-expanded="false" aria-controls="demo-panel">설정</button></div>
+  <div class="top-right"><span class="demo" id="driver-hub-label">경상남도 허브</span><span id="connection" class="connection" role="status"></span><button id="settings" class="settings secondary" type="button" aria-expanded="false" aria-controls="demo-panel">설정</button></div>
 </header>
 <main>
   <div class="intro">
@@ -33,7 +33,7 @@
     <div class="date-preview"><label>기사 시·도 <select id="driver-province"></select></label><p>선택한 허브에서 확정한 작업만 표시합니다.</p></div>
     <div id="storage-summary"></div>
     <form id="demo-clock" class="date-preview">
-      <label>시연 날짜 <select id="clock-day"><option value="0">오늘</option><option value="1">내일</option><option value="2">모레</option></select></label>
+      <label>시연 날짜 <select id="clock-day"></select></label>
       <label>시연 시각 <input id="clock-time" type="time" value="06:00" required></label>
       <button class="secondary" type="submit">시연 시간 적용</button>
       <button id="clock-reset" class="secondary" type="button">현재 날짜로 돌아가기</button>

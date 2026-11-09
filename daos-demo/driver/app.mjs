@@ -54,7 +54,7 @@ const PLACES = {
 const HUB = PLACES.admin;
 const SEGMENTS = ['06:00–12:00', '12:00–18:00', '18:00–24:00'];
 const MAPS = {
-  campus: { name: '창원대', title: '창원대학교 지도', file: 'campus.svg?v=5' },
+  campus: { name: '창원대', title: '창원대학교 지도', file: 'campus.svg?v=20' },
   jangyu: { name: '장유1동', title: '김해 장유1동 지도', file: 'jangyu.svg' },
   yangsan: { name: '양산 이마트', title: '양산 이마트 주변 지도', file: 'yangsan.svg' },
   sangnam: { name: '상남동 로터리', title: '창원 상남동 로터리 지도', file: 'sangnam.svg' },
@@ -116,16 +116,11 @@ let displayedDate;
 let selected = null;
 let noticeTimer;
 const timezone = { timeZone: 'Asia/Seoul' };
-const dateFormat = new Intl.DateTimeFormat('en-CA', { ...timezone, year:'numeric', month:'2-digit', day:'2-digit' });
+const DEMO_DATES=['2026-11-09','2026-11-10','2026-11-11','2026-11-12','2026-11-13'];
 const timeFormat = new Intl.DateTimeFormat('ko-KR', { ...timezone, hour:'2-digit', minute:'2-digit', hour12:false });
-function dateKey(offset = 0) {
-  const parts = dateFormat.formatToParts(new Date(Date.now() + offset * 86_400_000));
-  const value = type => parts.find(part => part.type === type).value;
-  return [value('year'), value('month'), value('day')].join('-');
-}
-function workDate() {
-  return [dateKey(1),dateKey(2)].includes(db.demoDate) ? db.demoDate : dateKey();
-}
+const dateKey=(offset=0)=>DEMO_DATES[offset];
+const workDate=()=>DEMO_DATES.includes(db.demoDate)?db.demoDate:dateKey();
+$('clock-day').replaceChildren(...DEMO_DATES.map((date,index)=>new Option(date,String(index))));
 function dateLabel(key) {
   const [, month, date] = key.split('-');
   return `${Number(month)}/${Number(date)}`;
@@ -236,7 +231,7 @@ function backupSummary(date) {
     const state = !remaining ? '완료' : date !== workDate() ? '해당일에 열림' : open?.index === segment.index ? '현재 구간' : waiting?.index === segment.index ? '시작 시각 대기' : '이전 구간 완료 후 열림';
     return `<li><span>${segment.slot} · ${mapFor(segment).name} · ${segment.jobs.length}건</span><small>${state}</small></li>`;
   }).join('');
-  return `<div class="backup-day"><strong>${date === dateKey() ? '오늘' : date === dateKey(1) ? '내일' : '모레'} ${dateLabel(date)}</strong>${descriptions ? `<ul>${descriptions}</ul>` : '<p>저장된 작업 없음</p>'}</div>`;
+  return `<div class="backup-day"><strong>${date === workDate() ? '운행일' : '다음날'} ${dateLabel(date)}</strong>${descriptions ? `<ul>${descriptions}</ul>` : '<p>저장된 작업 없음</p>'}</div>`;
 }
 const escape = value => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 function deliveryNumber(job) {
@@ -257,13 +252,14 @@ function render() {
   const finished = total > 0 && delivered === total;
   const picked = hasPickup(displayedDate);
   const previewing = displayedDate !== dateKey();
-  const previewLabel = displayedDate === dateKey(2) ? '모레' : '내일';
+  const previewLabel = '선택일';
   const job = jobs.find(item => item.key === selected) ?? jobs.find(item => stateFor(item) !== 'delivered');
   selected = job?.key ?? null;
   const offline = !connected;
   const blocked = offline && db.baseline;
   $('workspace').hidden = blocked;
   $('current-province').textContent = province;
+  $('driver-hub-label').textContent = `${province} 허브`;
   $('workspace').classList.toggle('workspace-no-map', !dayJobs.length && !finished);
   $('map-card').hidden = finished || !dayJobs.length;
   $('completion').hidden = !finished;
@@ -283,18 +279,19 @@ function render() {
     status = '작업 기록을 저장할 수 있는지 브라우저 설정을 확인해 주세요.';
   } else if (db.baseline) {
     title = blocked ? '기존 방식 · 작업표 조회 중단' : '기존 방식 · 서버에서 작업표 조회';
-    status = blocked ? '서버 복구를 기다리는 중입니다.' : '오늘부터 모레까지 작업표를 서버에서 확인합니다.';
+    status = blocked ? '서버 복구를 기다리는 중입니다.' : '운행일과 다음날 작업표를 서버에서 확인합니다.';
   } else if (!db.snapshot) {
     title = busy ? '작업표 내려받는 중' : '저장된 작업표 없음';
-    status = '처음에는 연결 상태에서 오늘부터 모레까지 작업표를 받아야 합니다.';
+    status = '처음에는 연결 상태에서 운행일과 다음날 작업표를 받아야 합니다.';
   } else {
     title = offline ? '네트워크 또는 서버 연결 끊김' : '작업표 저장됨';
     const when = timeFormat.format(new Date(db.snapshot.at));
-    status = offline ? `저장한 작업표를 사용합니다. 마지막 갱신 ${when}` : `오늘부터 모레까지 작업표 · 마지막 갱신 ${when}`;
+    status = offline ? `저장한 작업표를 사용합니다. 마지막 갱신 ${when}` : `운행일과 다음날 작업표 · 마지막 갱신 ${when}`;
   }
   const pending = db.baseline ? '' : db.pending.length ? `미동기화 기록 ${db.pending.length}건` : shellReady ? '오프라인 지도 준비됨' : '';
   $('status').innerHTML = `<span class="status-icon" aria-hidden="true">${offline ? '◈' : '✓'}</span><div class="status-text"><strong>${title}</strong> · ${status}</div><span class="sync-count${!db.baseline && db.pending.length ? ' pending-count' : ''}">${pending}</span>`;
-  const dates = [dateKey(),dateKey(1),dateKey(2)];
+  const first=DEMO_DATES.indexOf(displayedDate);
+  const dates=DEMO_DATES.slice(first,first+2);
   const count = dates.filter(date => jobsOn(date).length).length;
   const summary = `<p class="storage-total"><strong>${count}일치</strong> 작업표가 이 기기에 저장됨</p><div class="backup-days">${dates.map(backupSummary).join('')}</div>`;
   $('storage-summary').innerHTML = db.baseline
@@ -329,18 +326,13 @@ function render() {
     setZoom(1);
   }
   mapImage.alt = `${activeMap.title} · OpenStreetMap 건물과 도로`;
-  const points=new Map();
-  for(const item of handoff ? [] : jobs){
-    const place=locationFor(item);
-    if(stateFor(item)==='delivered'||!Number.isFinite(place?.x)||!Number.isFinite(place?.y))continue;
-    const key=`${place.x}/${place.y}`;
-    if(!points.has(key)||item.key===selected)points.set(key,{...place,selected:item.key===selected});
-  }
-  $('delivery-pins').innerHTML=[...points.values()].map(({x,y,name,selected},index)=>
-    `<span class="delivery-pin${selected?' selected':''}" style="left:${x}%;top:${y}%" title="${escape(name)}">${index+1}${selected?`<b>${escape(name)}</b>`:''}</span>`).join('');
+  const place=job&&!handoff&&stateFor(job)!=='delivered'?locationFor(job):null;
+  $('delivery-pins').innerHTML=Number.isFinite(place?.x)&&Number.isFinite(place?.y)
+    ? `<span class="delivery-pin selected" style="left:${place.x}%;top:${place.y}%" title="${escape(place.name)}">●<b>${escape(place.name)}</b></span>`
+    : '';
   $('map-title').textContent = activeMap.title;
   $('viewport').setAttribute('aria-label', activeMap.title);
-  $('work-date').textContent = `${previewing ? '다음날 시연' : '오늘'} ${dateLabel(displayedDate)} · ${segment ? `${segment.slot} · ${segment.index + 1}구간 ${activeMap.name} · ${offline ? '기기에 저장된 6시간 구간' : '6시간 배송 구간'}` : waiting ? `${waiting.slot.slice(0, 5)}부터 다음 구간 시작` : '현재 열려 있는 구간 없음'}`;
+  $('work-date').textContent = `${previewing ? '선택일 시연' : '오늘'} ${dateLabel(displayedDate)} · ${segment ? `${segment.slot} · ${segment.index + 1}구간 ${activeMap.name} · ${offline ? '기기에 저장된 6시간 구간' : '6시간 배송 구간'}` : waiting ? `${waiting.slot.slice(0, 5)}부터 다음 구간 시작` : '현재 열려 있는 구간 없음'}`;
   $('progress').textContent = `하루 배송 ${delivered} / ${total}건 완료`;
   $('jobs').innerHTML = jobs.length ? jobs.map(item => {
     const state = stateFor(item);
@@ -467,7 +459,8 @@ async function refresh() {
   const wasConnected = connected;
   let changed = false;
   try {
-    const { jobs, revision, events:remote, resets={}, resetRevision=0 } = await driverRequest(`?mode=${mode}`);
+    const requestedDate=workDate();
+    const { jobs, revision, events:remote, resets={}, resetRevision=0 } = await driverRequest(`?mode=${mode}&date=${requestedDate}`);
     if(resetRevision && resetRevision!==db.resetRevision){
       if(!save({...blank(),resets,resetRevision}))return;
       selected=null;
@@ -476,8 +469,9 @@ async function refresh() {
       updateClockControls();
       toast('전체 시연이 초기화됐습니다.');
       changed=true;
-      if(mode==='baseline')return;
+      if(mode==='baseline'||requestedDate!==workDate())return;
     }
+    if(requestedDate!==workDate())return;
     const cleared = Object.keys(resets).filter(date=>resets[date] !== db.resets?.[date]);
     const keep = event=>!cleared.includes(event.date);
     if(cleared.length){
@@ -504,9 +498,9 @@ async function refresh() {
     const retain = (db.snapshot?.jobs ?? []).filter(job => job.date < dateKey() && completions[job.date]);
     const available = [...jobs,...retain].filter(job => !expired(completions[job.date]));
     changed = changed || !db.snapshot || db.snapshot.revision !== revision
-      || db.snapshot.date !== dateKey() || pending.length !== db.pending.length
+      || db.snapshot.date !== requestedDate || pending.length !== db.pending.length
       || confirmed.length !== db.confirmed.length;
-    if (changed && !save({ ...db, resets, snapshot:{ at:new Date().toISOString(), date:dateKey(), revision, jobs:available },
+    if (changed && !save({ ...db, resets, snapshot:{ at:new Date().toISOString(), date:requestedDate, revision, jobs:available },
       pending, confirmed, completedDays:completions })) return;
     connected = true;
     if (revision && db.snapshot.receipt !== revision) {
@@ -545,7 +539,7 @@ function setMode(baseline) {
 $('mode-daos').addEventListener('click', () => setMode(false));
 $('mode-baseline').addEventListener('click', () => setMode(true));
 function updateClockControls() {
-  $('clock-day').value = String([dateKey(),dateKey(1),dateKey(2)].indexOf(workDate()));
+  $('clock-day').value = String(DEMO_DATES.indexOf(workDate()));
   $('clock-time').value = clockTime() ?? '06:00';
 }
 function setClock(date, time) {
@@ -553,6 +547,7 @@ function setClock(date, time) {
   selected = null;
   updateClockControls();
   render();
+  void refresh();
 }
 $('demo-clock').addEventListener('submit', event => {
   event.preventDefault();

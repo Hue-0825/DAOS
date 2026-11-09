@@ -8,14 +8,9 @@
 | 메인 서버 주문 원장 · `daos.main` | https://daos-dispatch-demo.ryker6365.chatgpt.site/central/ | `worker.mjs`, `central/`, `drizzle/` |
 | 시·도 허브 · `daos.hub` | https://daos-hub-demo.ryker6365.chatgpt.site/ | `hub/` |
 | 기사 앱 | Android APK 및 iOS Xcode 프로젝트 | `mobile/`, `driver/` |
+| 물류센터 로봇 관제실 | https://daos-dispatch-demo.ryker6365.chatgpt.site/central/warehouse.html | `central/warehouse*` |
 
 시연용 이름 옆에는 현재 접속 가능한 배포 주소를 적었습니다.
-
-## 공유 링크
-
-배포 사이트는 화면마다 별도 공유 링크를 사용합니다. 링크를 연 사람은 본인 ChatGPT 계정으로 로그인한 뒤 해당 화면을 사용할 수 있습니다. 관제 링크는 주문 원장과 서버 제어를 열고, 허브·스토어·기사 링크는 각 화면의 기능만 엽니다.
-
-공유 키는 저장소에 올리지 않습니다. 호스팅 환경에 SHA-256 해시를 `DAOS_SHARE_KEY_HASH`로, 소유자 로그인 이메일을 `DAOS_SHARE_OWNER_EMAIL`로 설정합니다. 키를 교체하고 배포하면 기존 공유 링크와 해당 링크로 발급된 세션을 무효화할 수 있습니다.
 
 ## 시연 순서
 
@@ -25,6 +20,10 @@
 4. DAOS 모드에서 작업하고 서버를 복구해 미동기화 기록이 전송되는 것을 확인합니다.
 5. 같은 날을 다시 시연하려면 서버를 복구한 상태에서 허브의 **배차 리셋**를 누릅니다. 선택한 시·도와 배송일의 시연 배차와 기록을 초기화하고, 주문을 배차 대기로 돌립니다. 리셋 이전 기기 기록은 재배차 후 수신 대상에서 제외됩니다.
 6. 전체 시연을 처음부터 시작하려면 메인 서버에서 **전체 시연 리셋**을 누릅니다. 9–11일 기본 주문 300건을 배차 대기로 복원하고, 12–13일 200건을 전송 대기로 되돌립니다. 추가 접수 주문은 별도 보관합니다. 기사 앱은 서버에 다시 연결되면 작업표와 시연 상태를 초기화합니다.
+
+## 로봇 관제실
+
+메인 관제센터 권한으로 접속한 다음 시·도를 선택합니다. 오늘과 다음날의 허브 전송 주문을 메인 서버에서 읽으며, 현재 배송일과 열린 시간대의 주문만 작업에 사용합니다. 하차·운반·분류·출차 배정·상차에 로봇 20대가 참여합니다. 허브에서 배차를 확정한 주문만 출차 배정 이후로 넘어갑니다. 연결이 끊기면 이 탭에 확보한 작업표를 쓰고, 복구 시 서버의 작업표를 다시 조회합니다. 로봇 진행 상태와 로컬 공정 기록은 탭 내 시연 상태이며 실제 배송 완료를 변경하지 않습니다.
 
 ## 로컬 실행
 
@@ -39,7 +38,7 @@ Node.js 24 이상이 필요합니다. 압축된 정적 리소스만 제공되는
 
 ## 기사 앱 빌드
 
-- **Android** — [시연용 APK 다운로드](downloads/DAOS-Driver.apk). 이전 APK와 서명 키가 달라 업데이트가 거절되면 기존 앱을 제거한 뒤 설치하세요. 직접 빌드하려면 `JAVA_HOME`, `ANDROID_BUILD_TOOLS`, `ANDROID_PLATFORM_JAR`를 설정하고 `bash mobile/android/build.sh`를 실행합니다. APK는 시연용 키로 서명합니다. 업데이트 설치에는 동일 키를 사용하세요.
+- **Android** — `JAVA_HOME`, `ANDROID_BUILD_TOOLS`, `ANDROID_PLATFORM_JAR`를 설정하고 `bash mobile/android/build.sh`를 실행합니다. APK는 시연용 키로 서명합니다. 업데이트 설치에는 동일 키를 사용하세요.
 - **iPhone** — `bash mobile/ios/prepare.sh` 후 `mobile/ios/DAOSDriver.xcodeproj`를 Xcode에서 엽니다. Signing & Capabilities에서 본인 Team과 고유 Bundle ID를 설정해 기기에서 실행하거나 TestFlight로 배포합니다. 기기 설치용 파일에는 Apple 서명이 필요합니다.
 - 두 앱은 지도와 작업 화면을 설치 파일에 포함합니다. 최초 서버 연결 시 앱 상단 **서버 로그인**을 누르고 배포 사이트에 접근할 수 있는 계정으로 로그인합니다.
 - 비공개 웹 서비스 키·환경값, 주문 데이터와 앱 서명 키는 저장소에 포함하지 않습니다.

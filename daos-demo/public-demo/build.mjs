@@ -1,5 +1,6 @@
-import { copyFile, mkdir } from 'node:fs/promises';
+import { copyFile, mkdir, rm } from 'node:fs/promises';
 
+await rm('dist', { recursive: true, force: true });
 await mkdir('dist', { recursive: true });
-await Promise.all(['index.html', 'style.css', 'demo.js', 'robots.txt', 'sitemap.xml', 'robot.html', 'robot.css', 'robot-sim.mjs', 'robot-view.mjs', 'warehouse-scene.mjs']
+await Promise.all(['index.html', 'style.css', 'robots.txt', 'sitemap.xml', 'robot.html']
   .map(file => copyFile(file, 'dist/' + file)));

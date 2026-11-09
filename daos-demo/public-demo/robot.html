@@ -3,42 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>DAOS 로봇 시뮬레이션 | 물류센터 장애 대응</title>
-  <meta name="description" content="입고, 피킹, 출고, 순찰 로봇이 서버 장애 때 각자 맡은 작업과 비상 매뉴얼에 따라 움직이는 2.5D 물류센터 시뮬레이션입니다.">
-  <link rel="canonical" href="https://daos-logistics.ryker6365.chatgpt.site/robot.html">
-  <link rel="stylesheet" href="robot.css">
-  <script type="module" src="robot-view.mjs"></script>
+  <meta http-equiv="refresh" content="0; url=https://daos-dispatch-demo.ryker6365.chatgpt.site/central/warehouse.html">
+  <title>DAOS 물류센터 로봇 관제실</title>
+  <link rel="stylesheet" href="style.css">
 </head>
-<body>
-  <header class="topbar"><a href="./" class="wordmark"><b>DAOS</b><span> / 물류센터</span></a><span class="environment">02 단계 · 가상 설비</span></header>
-  <main class="frame">
-    <section class="head">
-      <div><p class="kicker">물류센터 로봇 시뮬레이션</p><h1>물류센터 관제실</h1><p>로봇이 움직이는 중 서버를 끊어 보세요. 로봇을 선택하면 적용 중인 비상 매뉴얼을 볼 수 있습니다.</p></div>
-      <div class="controls"><button id="connection" class="danger" type="button">서버 연결 끊기</button><button id="pause" type="button">일시정지</button><button id="reset" type="button">처음부터</button></div>
-    </section>
-    <section class="metrics" aria-label="운영 현황">
-      <div><span>관제 연결</span><strong id="mode" role="status">● 연결됨</strong></div>
-      <div><span>배정 작업 완료</span><strong id="completed">0건</strong></div>
-      <div><span>로컬 기록 대기</span><strong id="pending">0건</strong></div>
-      <div><span>복구 후 동기화</span><strong id="synced">0건</strong></div>
-    </section>
-    <div class="dashboard">
-      <section class="panel map-panel" aria-labelledby="floor-title">
-        <div class="panel-head"><div><p class="kicker">시설 01</p><h2 id="floor-title">물류센터 배치도</h2></div><span id="time" class="time">00:00</span></div>
-        <canvas id="warehouse" width="1040" height="560" aria-label="입고장, 보관 선반, 포장대, 출고장과 로봇 네 대의 이동을 보여주는 물류센터 지도"></canvas>
-        <div class="map-key"><span><i></i>전용 통로</span><span><i class="amber"></i>공유 교차구역</span><span><i class="green"></i>충전 구역</span></div>
-      </section>
-      <section class="panel inspector" aria-labelledby="fleet-title">
-        <div class="panel-head"><div><p class="kicker">로봇 4대</p><h2 id="fleet-title">로봇 상태</h2></div></div>
-        <div id="fleet" class="fleet"></div>
-        <div id="detail" class="manual"><p class="kicker">비상 매뉴얼</p><h3 id="robot-name"></h3><p id="robot-rule"></p><p id="robot-note" class="action-note"></p><p id="robot-task" class="task-note"></p></div>
-      </section>
-    </div>
-    <section class="panel log-panel" aria-labelledby="log-title">
-      <div class="panel-head"><div><p class="kicker">현장 기록</p><h2 id="log-title">운영 이벤트</h2></div></div>
-      <ol id="events" class="events"><li>로봇의 작업을 시작합니다.</li></ol>
-    </section>
-    <p class="disclosure">시뮬레이션 화면입니다. 로봇의 이동과 기록은 이 브라우저에서 재현합니다.</p>
-  </main>
-</body>
+<body><main class="shell section"><h1>DAOS 물류센터 로봇 관제실</h1><a class="primary" href="https://daos-dispatch-demo.ryker6365.chatgpt.site/central/warehouse.html">로봇 관제실 열기 ↗</a></main></body>
 </html>

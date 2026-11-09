@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>DAOS 물류센터 로봇 관제실</title>
+  <link rel="stylesheet" href="warehouse.css">
+  <script type="module" src="warehouse-view.mjs"></script>
+</head>
+<body>
+  <header class="topbar"><a class="wordmark" href="https://daos-logistics.ryker6365.chatgpt.site/"><b>DAOS</b><span> / 통합 사이트</span></a><a href="./" target="_blank" rel="noopener">메인 관제센터 ↗</a></header>
+  <main class="frame">
+    <section class="head">
+      <div><p class="kicker">02 · 물류 현장</p><h1>물류센터 로봇 관제실</h1><p>지역 허브 작업표를 바탕으로 로봇 20대가 하차부터 상차까지 이어서 처리합니다.</p></div>
+      <div class="controls"><label>시·도 허브 <select id="province"><option>경상남도</option></select></label><button id="pause" type="button">일시정지</button></div>
+    </section>
+    <section class="metrics" aria-label="운영 현황">
+      <div><span>메인 서버</span><strong id="mode" role="status">연결 확인 중</strong></div>
+      <div><span>시연 일시</span><strong id="clock">—</strong></div>
+      <div><span>당일 작업표</span><strong id="today">0건</strong></div>
+      <div><span>다음날 보관</span><strong id="tomorrow">0건</strong></div>
+      <div><span>가상 상차 완료</span><strong id="completed">0건</strong></div>
+      <div><span>로컬 공정 기록</span><strong id="pending">0건</strong></div>
+    </section>
+    <section class="panel map-panel" aria-labelledby="floor-title">
+      <div class="panel-head"><div><p class="kicker">공유 통로 · 작업대 15곳</p><h2 id="floor-title">물류센터 배치도</h2></div><span id="active" class="time">이동 및 작업 0 / 20대</span></div>
+      <p id="notice" class="notice">허브에서 전송된 작업표를 확인하고 있습니다.</p>
+      <div class="canvas-wrap"><canvas id="warehouse" width="1320" height="700" aria-label="물류센터의 트럭, 선반, 공유 통로와 역할별 로봇 20대"></canvas></div>
+      <div id="legend" class="map-key"></div>
+    </section>
+    <section class="panel stages" aria-labelledby="stages-title">
+      <div class="panel-head"><div><p class="kicker">주문별 가상 공정</p><h2 id="stages-title">하차 → 운반 → 분류 → 출차 배정 → 상차</h2></div></div>
+      <div class="metrics pipeline" id="pipeline"></div>
+    </section>
+    <div class="dashboard">
+      <section class="panel inspector" aria-labelledby="fleet-title">
+        <div class="panel-head"><div><p class="kicker">로봇 20대</p><h2 id="fleet-title">로봇 상태</h2></div></div>
+        <div id="fleet" class="fleet"></div>
+      </section>
+      <section class="panel log-panel" aria-labelledby="log-title">
+        <div id="detail" class="manual"><p class="kicker">선택한 로봇 · 비상 매뉴얼</p><h3 id="robot-name"></h3><p id="robot-rule"></p><p id="robot-note" class="action-note"></p><p id="robot-task" class="task-note"></p></div>
+        <div class="panel-head"><div><p class="kicker">현장 기록</p><h2 id="log-title">운영 이벤트</h2></div></div>
+        <ol id="events" class="events"><li>작업표를 기다리는 중입니다.</li></ol>
+      </section>
+    </div>
+    <p class="disclosure">주문·배차·시연 시계는 DAOS 서버에서 읽습니다. 로봇 공정과 복구 기록은 이 화면에서 시연하며, 가상 상차 완료는 기사 앱의 배송 완료로 기록되지 않습니다. 장애 시연은 메인 관제센터에서 연결을 끊고 복구해 주세요.</p>
+  </main>
+</body>
+</html>

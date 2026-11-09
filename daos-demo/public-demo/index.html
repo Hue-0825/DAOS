@@ -4,57 +4,41 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DAOS 스마트 물류 | 통합 시연</title>
-  <meta name="description" content="DAOS는 서버 장애 중에도 기사 앱에 저장된 작업표로 배송을 이어가고, 연결 복구 후 완료 기록을 동기화하는 스마트 물류 시연 프로젝트입니다.">
-  <meta property="og:type" content="website">
+  <meta name="description" content="DAOS 스마트 물류의 스토어, 메인 관제센터, 지역 허브, 기사 앱과 물류센터 로봇 관제실을 한곳에서 엽니다.">
   <link rel="canonical" href="https://daos-logistics.ryker6365.chatgpt.site/">
-  <meta property="og:url" content="https://daos-logistics.ryker6365.chatgpt.site/">
-  <meta property="og:title" content="DAOS 스마트 물류 | 통합 시연">
-  <meta property="og:description" content="서버 연결을 끊고 기존 방식과 DAOS의 배송 작업 흐름을 비교해 보세요.">
   <link rel="stylesheet" href="style.css">
-  <script src="demo.js" defer></script>
 </head>
 <body>
-  <header class="shell bar"><a class="brand" href="#top">DAOS <span>스마트 물류</span></a><nav><a href="#systems">운영 사이트</a><a href="robot.html">로봇 시뮬레이션</a></nav></header>
-  <main class="shell" id="top">
-    <section class="hero">
-      <p class="eyebrow">스마트 물류 경진대회 프로젝트</p>
-      <h1>서버가 멈춰도<br>배송은 이어집니다.</h1>
-      <p class="lead">DAOS는 기사 기기에 미리 저장한 작업표로 서버 장애 중 배송을 계속하고, 연결이 돌아오면 완료 기록을 동기화합니다.</p>
-      <div class="hero-actions"><a class="primary" href="#systems">운영 사이트 열기</a><a class="secondary" href="robot.html">로봇 시뮬레이션 시작</a></div>
+  <header class="shell bar"><a class="brand" href="./">DAOS <span>스마트 물류</span></a><nav aria-label="주 메뉴"><a href="#systems">운영 화면</a><a href="#warehouse">물류 현장</a><a href="#scenario">시연 순서</a></nav></header>
+  <main class="shell">
+    <section class="hero" aria-labelledby="portal-title">
+      <div><p class="eyebrow">DAOS / 통합 시연</p><h1 id="portal-title">주문 접수부터<br>물류 현장까지</h1><p class="lead">한 주문이 메인 서버, 지역 허브와 기사 앱으로 이어지는 과정과 서버 장애 때 저장된 작업표가 현장에서 쓰이는 모습을 확인하세요.</p>
+      <div class="actions"><a class="primary" href="#systems">운영 화면 선택</a><a class="secondary" href="https://daos-dispatch-demo.ryker6365.chatgpt.site/central/warehouse.html">로봇 관제실 열기 ↗</a></div></div>
+      <aside class="overview" aria-label="시연 구성"><span>01 / 배송 운영</span><strong>4개 운영 화면</strong><p>주문 접수 · 허브 전송 · 기사 배차 · 배송</p><span>02 / 물류 현장</span><strong>로봇 20대</strong><p>하차 · 운반 · 분류 · 출차 배정 · 상차</p></aside>
     </section>
-    <section class="flow" id="systems" aria-labelledby="flow-title">
-      <p class="eyebrow">01 단계 · 주문과 배송</p><h2 id="flow-title">운영 사이트</h2><p class="lead">사용할 화면을 선택하세요. 공유받은 계정은 처음에 해당 화면의 공유 링크로 로그인해 접근을 활성화해야 합니다.</p>
-      <ol>
-        <li><span>01</span><strong>스토어</strong><p>지도에 등록된 배송지를 골라 주문합니다.</p><a href="https://daos-shop-demo.ryker6365.chatgpt.site/" target="_blank" rel="noopener noreferrer">스토어 열기 ↗</a></li>
-        <li><span>02</span><strong>메인 관제센터</strong><p>주문을 모아 담당 지역 허브로 전송합니다.</p><a href="https://daos-dispatch-demo.ryker6365.chatgpt.site/central/" target="_blank" rel="noopener noreferrer">관제센터 열기 ↗</a></li>
-        <li><span>03</span><strong>지역 허브</strong><p>배송일과 시간대별로 기사에게 작업을 배차합니다.</p><a href="https://daos-hub-demo.ryker6365.chatgpt.site/" target="_blank" rel="noopener noreferrer">지역 허브 열기 ↗</a></li>
-        <li><span>04</span><strong>기사 앱</strong><p>운행일과 다음날의 작업표를 기기에 저장합니다.</p><a href="https://daos-phone-driver.ryker6365.chatgpt.site/driver/" target="_blank" rel="noopener noreferrer">기사 앱 열기 ↗</a></li>
+    <section class="section" id="systems" aria-labelledby="systems-title">
+      <p class="eyebrow">01 / 배송 운영</p><h2 id="systems-title">역할별 운영 화면</h2>
+      <ol class="systems">
+        <li><span class="number">01 / 주문 접수</span><h3>스토어</h3><p>상품과 등록된 배송지를 골라 주문을 접수합니다.</p><a href="https://daos-shop-demo.ryker6365.chatgpt.site/" target="_blank" rel="noopener noreferrer">스토어 열기 ↗</a></li>
+        <li><span class="number">02 / 서버 제어</span><h3>메인 관제센터</h3><p>주문 원장, 허브 전송, 시연 시각, 서버 연결을 관리합니다.</p><a href="https://daos-dispatch-demo.ryker6365.chatgpt.site/central/" target="_blank" rel="noopener noreferrer">메인 관제센터 열기 ↗</a></li>
+        <li><span class="number">03 / 작업 배차</span><h3>지역 허브</h3><p>담당 지역의 주문을 확인하고 배송일과 시간대별 배차를 확정합니다.</p><a href="https://daos-hub-demo.ryker6365.chatgpt.site/" target="_blank" rel="noopener noreferrer">지역 허브 열기 ↗</a></li>
+        <li><span class="number">04 / 배송 실행</span><h3>기사 앱</h3><p>작업표를 기기에 저장하고 배송을 진행합니다. 복구 후 완료 기록을 전송합니다.</p><a href="https://daos-phone-driver.ryker6365.chatgpt.site/driver/" target="_blank" rel="noopener noreferrer">기사 앱 열기 ↗</a></li>
+      </ol>
+      <p class="access">처음 참여하는 분은 역할별 공유 링크로 로그인해 접속을 활성화해 주세요. 로봇 관제실은 메인 관제센터 권한을 사용합니다.</p>
+    </section>
+    <section class="section warehouse" id="warehouse" aria-labelledby="warehouse-title"><div>
+      <p class="eyebrow">02 / 물류 현장</p><h2 id="warehouse-title">허브 작업표로 움직이는 로봇 20대</h2><p class="lead">가상 물류센터에서 로봇이 선반과 다른 로봇을 피해 공유 통로를 오갑니다. 연결이 끊기면 미리 받은 작업표와 역할별 매뉴얼을 사용합니다.</p>
+      <ul class="roles"><li>하차 4대</li><li>운반 5대</li><li>분류 4대</li><li>출차 배정 3대</li><li>상차 4대</li></ul>
+    </div><a class="primary" href="https://daos-dispatch-demo.ryker6365.chatgpt.site/central/warehouse.html">로봇 관제실 열기 ↗</a></section>
+    <section class="section" id="scenario" aria-labelledby="scenario-title"><p class="eyebrow">03 / 장애 시연</p><h2 id="scenario-title">작업표 준비부터 연결 복구까지</h2>
+      <ol class="scenario">
+        <li><strong>작업표 준비</strong><p>메인 관제센터에서 날짜와 시각을 맞추고, 지역 허브에서 시연할 주문을 배차 확정합니다.</p></li>
+        <li><strong>현장 시작</strong><p>로봇 관제실과 기사 앱에서 같은 시·도를 선택하고, 작업표가 들어왔는지 확인합니다.</p></li>
+        <li><strong>서버 연결 끊기</strong><p>메인 관제센터에서 연결을 끊습니다. 로봇 관제실에서 저장된 작업과 허브 배차 대기 건수를 확인합니다.</p></li>
+        <li><strong>연결 복구</strong><p>메인 관제센터에서 복구한 뒤, 기사 앱의 미동기화 건수와 로봇 관제실의 로컬 공정 기록을 확인합니다.</p></li>
       </ol>
     </section>
-    <section class="step-two" aria-labelledby="robot-step"><div><p class="eyebrow">02 단계 · 물류센터 로봇</p><h2 id="robot-step">입고부터 출고까지 움직이는 물류센터</h2><p class="lead">로봇 네 대의 이동을 따라가며, 서버 장애 때 전용 통로 운행과 공유 교차구역 대기가 어떻게 달라지는지 확인하세요.</p></div><a class="primary" href="robot.html">로봇 관제실 열기 →</a></section>
-    <section id="demo" aria-labelledby="demo-title">
-      <p class="eyebrow">가상 배송 3건</p>
-      <h2 id="demo-title">서버 연결을 끊어 보세요</h2>
-      <p class="lead">기존 방식과 DAOS에 같은 장애를 적용합니다. 서버를 복구하면 DAOS의 미동기화 건수가 줄어드는 것을 확인할 수 있습니다.</p>
-      <div class="demo-tools">
-        <button type="button" class="primary" id="connection">서버 연결 끊기</button>
-        <button type="button" class="secondary" id="reset">처음부터</button>
-        <span id="server" role="status">서버 연결됨</span>
-      </div>
-      <div class="compare">
-        <article aria-labelledby="baseline-title">
-          <h3 id="baseline-title">기존 방식</h3><p id="baseline-state"></p><strong class="counter" id="baseline-count">0 / 3건</strong>
-          <button type="button" class="secondary" id="baseline-deliver">다음 배송 완료</button>
-        </article>
-        <article aria-labelledby="daos-title">
-          <h3 id="daos-title">DAOS</h3><p id="daos-state"></p><strong class="counter" id="daos-count">0 / 3건</strong>
-          <button type="button" class="primary" id="daos-deliver">다음 배송 완료</button>
-        </article>
-      </div>
-      <p class="note">이 화면은 가상 배송을 브라우저에서 체험하는 시연입니다.</p>
-      <noscript><p>배송 비교를 체험하려면 브라우저에서 자바스크립트를 켜 주세요.</p></noscript>
-    </section>
   </main>
-  <footer class="shell">DAOS · 스마트 물류 경진대회 시연 <a href="https://github.com/Hue-0825/DAOS" target="_blank" rel="noopener noreferrer">GitHub 저장소 ↗</a></footer>
+  <footer class="shell bar"><span>DAOS · 스마트 물류 경진대회</span><a href="https://github.com/Hue-0825/DAOS" target="_blank" rel="noopener noreferrer">GitHub 저장소 ↗</a></footer>
 </body>
 </html>

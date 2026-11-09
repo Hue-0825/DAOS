@@ -1,15 +1,5 @@
-# DAOS 통합 사이트와 물류센터 시뮬레이션
+# DAOS 통합 시연
 
-- [통합 사이트](https://daos-logistics.ryker6365.chatgpt.site/)에서 운영 화면과 가상 배송 비교를 열 수 있습니다. 운영 화면은 발급된 공유 링크로 로그인해 접근을 먼저 활성화하세요.
-- [로봇 시뮬레이션](https://daos-logistics.ryker6365.chatgpt.site/robot.html)에서 서버 연결을 차단하고 복구할 수 있습니다.
+[통합 사이트](https://daos-logistics.ryker6365.chatgpt.site/)는 스토어, 메인 관제센터, 지역 허브, 기사 앱과 [로봇 관제실](https://daos-dispatch-demo.ryker6365.chatgpt.site/central/warehouse.html)을 연결합니다. 로봇 관제실은 메인 관제센터의 접속 권한과 주문 작업표를 사용합니다.
 
-| 로봇 | 장애 시 시뮬레이션 규칙 |
-|---|---|
-| 입고 | 사전 배정한 입고 작업을 전용 통로에서 마치고 대기 |
-| 피킹 | 공유 교차구역 진입선을 넘기 전 대기 |
-| 출고 | 공유 교차구역에 있으면 확보한 출구까지 이동하고 재진입 보류 |
-| 순찰 | 배터리가 35% 이하면 전용 통로로 충전 복귀 |
-
-`robot-sim.mjs`는 로봇 상태와 통로 점유를, `warehouse-scene.mjs`는 평면 좌표를 투영한 물류센터 그림을, `robot-view.mjs`는 조작과 표시를 담당합니다. 작업 및 복구 기록은 시뮬레이션 실행 중 브라우저 메모리에 저장됩니다.
-
-이 폴더에서 `node build.mjs`로 배포 파일을 만들고 `dist/`를 정적 서버로 열 수 있습니다. 다른 주소에 배포할 때는 HTML과 검색용 파일의 기준 주소를 갱신합니다.
+`node build.mjs`로 정적 사이트를 빌드합니다. 물류센터 관제실 소스는 상위 디렉터리의 `central/warehouse*`에 있습니다.

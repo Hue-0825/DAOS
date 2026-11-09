@@ -179,6 +179,26 @@ async function intakeApi(request, db, path) {
     await run(db,'UPDATE control SET demo_date=?, demo_time=? WHERE id=1',date,time).run();
     return json({date,time});
   }
+  if (path === '/api/central/warehouse' && request.method === 'GET') {
+    const province = provinceFrom(request);
+    if (!routing.provinces.includes(province)) return json({error:'시·도 허브를 확인해 주세요.'},400);
+    const [control, queue] = await db.batch([
+      run(db,controlSql),
+      run(db,`SELECT intake.id, intake.work_date AS date, intake.segment, intake.quantity, intake.product,
+        orders.revision AS dispatch
+        FROM intake LEFT JOIN orders ON orders.id = intake.id
+        WHERE ${guard} AND intake.province = ? AND intake.region IS NOT NULL
+          AND intake.segment BETWEEN 0 AND 2 AND intake.work_date BETWEEN ${driverWindow}
+          AND ${released('intake.work_date')}
+          AND NOT EXISTS (SELECT 1 FROM events WHERE job_key = intake.work_date || '/' || intake.id
+            AND mode = CASE WHEN intake.province = '경상남도' THEN 'daos' ELSE intake.province || '|daos' END
+            AND state = 'delivered')
+        ORDER BY intake.work_date, intake.segment, intake.created_at, intake.rowid`,province),
+    ]);
+    const state = control.results[0];
+    return json({online:Boolean(state.online),clock:clockView(state),resetRevision:state.reset_revision,
+      provinces:routing.provinces,orders:state.online?queue.results:null});
+  }
   if (path === '/api/central/orders' && request.method === 'GET') {
     const [result,control,releases]=await db.batch([
       run(db,`${intakeSql} WHERE intake.work_date >= ? ORDER BY intake.work_date,CASE WHEN intake.work_date < ? THEN COALESCE(intake.segment,3) ELSE 0 END,intake.created_at,intake.rowid`,dates()[0],QUEUE_START),
@@ -409,7 +429,7 @@ export default {
         const driver = token === env.DAOS_DRIVER_TOKEN && (pathname === '/api/driver' || pathname.startsWith('/api/driver/'));
         const consoleView = Boolean(request.headers.get('oai-authenticated-user-id'))
           && (!env.DAOS_SHARE_KEY_HASH || await shareAuthorized(request,env)) && (
-          (pathname === '/api/central/orders' && request.method === 'GET') ||
+          (['/api/central/orders','/api/central/warehouse'].includes(pathname) && request.method === 'GET') ||
           (['/api/central/reset','/api/central/release','/api/central/clock','/api/central/connection'].includes(pathname) && request.method === 'POST' && request.headers.get('Origin') === new URL(request.url).origin)
         );
         const seed = pathname === '/api/central/seed' && request.method === 'POST'

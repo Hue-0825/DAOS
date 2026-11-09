@@ -8,6 +8,12 @@ function allowed(path) {
 export default {
   async fetch(request,env) {
     const url=new URL(request.url);
+    if(env.DAOS_SHARE_KEY_HASH){
+      const shared=await shareRoute(request,env,root);
+      if(shared)return shared;
+      if(!await shareAuthorized(request,env))return url.pathname.startsWith('/api/')
+        ? shareJson({error:'DAOS 공유 링크로 로그인하세요.'},401) : shareResponse(null,303,{Location:'/share'});
+    }
     if(url.pathname.startsWith('/api/')){
       if(!allowed(url.pathname))return json({error:'요청을 찾을 수 없습니다.'},404);
       const origin=request.headers.get('Origin');

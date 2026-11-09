@@ -8,5 +8,5 @@ for (const folder of ['driver', 'ops', 'shop', 'central', 'hub']) {
   }
 }
 await mkdir('dist/server', { recursive: true });
-const worker = await readFile('worker.mjs', 'utf8');
-await writeFile('dist/server/index.js', `const ASSETS = ${JSON.stringify(assets)};\n${worker}`);
+const [worker,share] = await Promise.all(['worker.mjs','share-access.mjs'].map(path=>readFile(path,'utf8')));
+await writeFile('dist/server/index.js', `const ASSETS = ${JSON.stringify(assets)};\n${share}\n${worker}`);

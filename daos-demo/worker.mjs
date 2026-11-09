@@ -396,13 +396,18 @@ export default {
     const { pathname } = new URL(request.url);
     const hostedSplit = Boolean(env.DAOS_SHOP_TOKEN);
     const split = hostedSplit || Boolean(env.SERVICE_TOKEN);
+    if(env.DAOS_SHARE_KEY_HASH){
+      const shared=await shareRoute(request,env,'/central/');
+      if(shared)return shared;
+    }
     if (pathname.startsWith('/api/')) {
       const token = request.headers.get('X-DAOS-Service-Key');
       if (hostedSplit) {
         const shop = token === env.DAOS_SHOP_TOKEN && pathname.startsWith('/api/shop/');
         const hub = token === env.DAOS_HUB_TOKEN && pathname.startsWith('/api/hub/');
         const driver = token === env.DAOS_DRIVER_TOKEN && (pathname === '/api/driver' || pathname.startsWith('/api/driver/'));
-        const consoleView = Boolean(request.headers.get('oai-authenticated-user-id')) && (
+        const consoleView = Boolean(request.headers.get('oai-authenticated-user-id'))
+          && (!env.DAOS_SHARE_KEY_HASH || await shareAuthorized(request,env)) && (
           (pathname === '/api/central/orders' && request.method === 'GET') ||
           (['/api/central/reset','/api/central/release','/api/central/clock','/api/central/connection'].includes(pathname) && request.method === 'POST' && request.headers.get('Origin') === new URL(request.url).origin)
         );
@@ -420,6 +425,7 @@ export default {
         return json({ error:'서버에서 요청을 처리하지 못했습니다.' },500);
       }
     }
+    if(env.DAOS_SHARE_KEY_HASH && !await shareAuthorized(request,env))return shareResponse(null,303,{Location:'/share'});
     if (hostedSplit && /^\/ops\/?$/.test(pathname) && env.DAOS_HUB_URL) return Response.redirect(env.DAOS_HUB_URL,302);
     if (hostedSplit && /^\/driver\/?$/.test(pathname) && env.DAOS_DRIVER_URL) return Response.redirect(new URL('/driver/',env.DAOS_DRIVER_URL),302);
     if (split && !['/','/central/'].includes(pathname) && !pathname.startsWith('/central/')) return new Response('Not found',{status:404});

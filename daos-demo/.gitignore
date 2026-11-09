@@ -1,0 +1,5 @@
+dist/
+*.sqlite*
+
+mobile/ios/WebAssets/
+mobile/android/*.apk*

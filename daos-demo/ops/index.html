@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DAOS 운영 웹</title><link rel="stylesheet" href="/ops/ops.css?v=2"><script type="module" src="/ops/ops.mjs?v=2"></script></head>
+<body><header><strong>DAOS 운영 웹</strong><a href="/driver/">기사 앱 열기 ↗</a></header>
+<main>
+<div class="intro"><span>주문 · 배차 · 장애 시연</span><h1>배송 운영실</h1><p>PC에서 주문을 확정하고, 휴대폰에서 기사 앱을 열어 저장을 확인하세요.</p></div>
+<section class="metrics" aria-label="운영 현황">
+  <article><small>기사 서버</small><strong id="connection">확인 중</strong><button type="button" id="toggle" disabled>연결 상태 변경</button></article>
+  <article><small>기사 기기 백업</small><strong id="receipt">확인 중</strong><p id="receipt-note"></p></article>
+  <article><small>서버에 반영된 배송</small><strong id="progress">확인 중</strong><p id="progress-note"></p></article>
+</section>
+<p id="notice" role="status"></p>
+<div class="workspace">
+<section class="card entry-card" aria-labelledby="entry-title"><div class="section-kicker">01 · 주문 등록</div><h2 id="entry-title">새 배송 주문</h2><p>배송일과 시간대를 정한 뒤 배송지를 검색하세요.</p>
+<form id="order">
+<div class="form-row"><label>배송일<select id="date" required></select></label>
+<label>배송 구간<select id="segment"><option value="0">06:00–12:00</option><option value="1">12:00–18:00</option><option value="2">18:00–24:00</option></select></label></div>
+<div class="destination">
+<label for="destination-search">배송지 검색</label>
+<input id="destination-search" type="search" placeholder="예시 · 도서관, 상남, 율하" autocomplete="off" required aria-describedby="destination-hint">
+<p id="destination-hint" class="field-hint"></p>
+<div id="destination-results" class="destination-results" aria-label="배송지 검색 결과" hidden></div>
+<div id="destination-selected" class="destination-selected" hidden></div>
+</div>
+<label>주문 이름<input id="title" maxlength="140" placeholder="예시 · 도서관 행사 물품" required></label>
+<label>물품 및 수량<input id="cargo" maxlength="140" placeholder="예시 · 책 2상자" required></label>
+<label>인계 장소<input id="instructions" maxlength="140" value="주 출입구 앞" required></label>
+<button id="register" type="submit" disabled>작업표에 주문 추가</button><p class="field-hint">추가한 주문은 배차 확정 후 기사 앱에 전송됩니다.</p>
+</form></section>
+<section class="card sheet-card" aria-labelledby="sheet-title">
+<div class="list-head"><div><div class="section-kicker">02 · 작업표 관리</div><h2 id="sheet-title">배송 작업표</h2><p id="order-count"></p></div><div class="buttons"><button id="sample" type="button" class="secondary">시연 주문 30건 채우기</button><button id="publish" type="button">배차 확정</button></div></div>
+<div class="sheet-filters">
+  <label>날짜<select id="filter-date"><option value="all">오늘·내일</option><option value="0">오늘</option><option value="1">내일</option></select></label>
+  <label>상태<select id="filter-status"><option value="all">모든 상태</option><option value="pending">확정 대기</option><option value="dispatched">배차 확정</option><option value="completed">배송 완료</option></select></label>
+  <label>작업표 검색<input id="filter-search" type="search" placeholder="주문명, 배송지 또는 품번"></label>
+</div>
+<div class="sheet-scroll" role="region" aria-label="배송 작업표" tabindex="0">
+<table><thead><tr><th scope="col">품번</th><th scope="col">배송 일정</th><th scope="col">배송지</th><th scope="col">주문·물품</th><th scope="col">상태</th></tr></thead>
+<tbody id="orders"></tbody></table></div>
+<p id="filtered-count" class="field-hint" aria-live="polite"></p>
+</section>
+</div>
+</main></body></html>

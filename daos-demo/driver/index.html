@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#181637">
+<meta name="description" content="서버 장애 중에도 작업을 이어가는 DAOS 지역 허브 기사 앱">
+<title>DAOS Driver · 지역 허브</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="manifest" href="app.webmanifest">
+<link rel="stylesheet" href="style.css?v=22">
+<script type="module" src="app.mjs?v=22"></script>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="./"><img src="icon.svg" alt="" width="40" height="40"><span>DAOS <strong>Driver</strong><small>기사용 작업 앱</small></span></a>
+  <div class="top-right"><span class="demo" id="driver-hub-label">경상남도 허브</span><span id="connection" class="connection" role="status"></span><button id="settings" class="settings secondary" type="button" aria-expanded="false" aria-controls="demo-panel">설정</button></div>
+</header>
+<main>
+  <div class="intro"><h1>배송 작업</h1></div>
+  <section class="comparison" aria-label="운영 방식 비교">
+    <div><strong>운영 방식 비교</strong></div>
+    <div class="mode-buttons" role="group" aria-label="운영 방식 선택">
+      <button id="mode-daos" class="secondary" type="button" aria-pressed="true">DAOS 적용</button>
+      <button id="mode-baseline" class="secondary" type="button" aria-pressed="false">기존 방식 · DAOS 없음</button>
+    </div>
+  </section>
+  <section id="demo-panel" class="settings-panel" aria-labelledby="settings-title" hidden>
+    <div class="settings-head"><h2 id="settings-title">설정</h2><button id="reset" type="button" class="secondary">기기 저장 초기화</button></div>
+    <div class="date-preview"><label>기사 시·도 <select id="driver-province"></select></label><p>선택한 허브에서 확정한 작업만 표시합니다.</p></div>
+    <div id="storage-summary"></div>
+    <p>시연 날짜와 시간은 메인 서버에서 설정합니다.</p>
+  </section>
+  <section class="status-bar" id="status" aria-live="polite"></section>
+  <section id="backup" class="backup card" aria-label="저장된 작업표" hidden></section>
+  <p id="preview-banner" class="work-date preview-banner" role="status" hidden></p>
+  <section class="card backup" aria-label="날짜별 배송 일정"><h2>날짜별 배송 일정</h2><div id="schedule-days" class="backup-days"></div></section>
+  <section id="blocked" class="backup card" aria-labelledby="blocked-title" hidden>
+    <h2 id="blocked-title">기존 방식 · 배송 중단</h2>
+    <p>서버에서 집하·배송 정보를 받을 수 없어 작업표 조회와 완료 기록이 중단됐습니다. 서버를 복구하면 이어서 작업할 수 있습니다.</p>
+  </section>
+  <div class="workspace" id="workspace">
+    <section class="work card" aria-labelledby="work-title">
+      <div class="work-head"><div><h2 id="work-title">오늘 배정된 작업</h2><p id="progress"></p></div><span class="section-symbol" aria-hidden="true">▤</span></div>
+      <div id="pickup-summary" class="pickup-summary"></div>
+      <div class="work-date" id="work-date"></div>
+      <button id="segment-start" class="primary segment-start" type="button" hidden></button>
+      <div id="jobs" class="jobs"></div>
+    </section>
+    <section class="map card" id="map-card" aria-labelledby="map-title" hidden>
+      <div class="map-head"><div><h2 id="map-title">캠퍼스 지도</h2><p>배송 권역 안내</p></div></div>
+      <div id="next-delivery" class="next-delivery" role="status" hidden><strong id="next-delivery-title"></strong><p id="next-delivery-time"></p></div>
+      <div class="viewport" id="viewport" aria-label="창원대학교 캠퍼스 지도">
+        <div id="scene"><img id="map-image" alt="배송 권역 지도" width="1080" height="504" draggable="false"><div id="delivery-pins" aria-hidden="true"></div></div>
+        <div class="zoom"><button id="zoom-in" type="button" aria-label="확대">+</button><button id="zoom-out" type="button" aria-label="축소">−</button><button id="zoom-reset" type="button" aria-label="지도 전체 보기" title="지도 전체 보기">⌂</button></div>
+      </div>
+      <div id="detail" class="detail"></div>
+    </section>
+    <section id="completion" class="card completion-card" aria-labelledby="completion-title" hidden>
+      <span class="completion-check" aria-hidden="true">✓</span>
+      <h2 id="completion-title">금일 배송이 완료되었습니다</h2>
+      <p id="completion-note"></p>
+    </section>
+  </div>
+  <footer><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a></footer>
+</main>
+<section id="mobile-actions" class="mobile-actions" aria-label="기사 빠른 작업" hidden>
+  <div><strong id="mobile-action-title"></strong><p id="mobile-action-note"></p></div>
+  <button id="mobile-action" class="primary" type="button"></button>
+</section>
+<div id="notice" class="toast" role="status" hidden></div>
+</body>
+</html>

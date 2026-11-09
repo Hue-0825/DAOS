@@ -47,3 +47,8 @@ td strong{overflow-wrap:anywhere}
 #reset-result:empty{display:none}
 #release-result{flex-basis:100%;font-weight:700}
 #release-result:empty{display:none}
+.clock-panel{margin-bottom:14px}
+.clock-panel summary{cursor:pointer;font-weight:750}
+#shared-clock{margin-left:8px;color:#554978;font-size:13px;font-weight:600}
+.clock-panel .toolbar{justify-content:flex-start;align-items:end;margin-top:12px}
+#release-panel{margin:10px 0}

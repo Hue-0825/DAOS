@@ -5,6 +5,8 @@ let data;
 let regional=false;
 let resetting=false;
 let releasing=false;
+let settingClock=false;
+let formEdited=false;
 function render(){
   $('all').setAttribute('aria-pressed',String(!regional));
   $('regional').setAttribute('aria-pressed',String(regional));
@@ -19,11 +21,21 @@ function render(){
   $('server-state').textContent=data.online?'메인 서버 연결됨':'메인 서버 연결됨 · 기사 연결 차단 중';
   $('region-note').textContent=`${province} 허브 · 접수 ${rows.length}건`;
   $('count').textContent=`전체 ${data.orders.length}건 중 ${rows.length}건 표시`;
-  $('release-days').innerHTML=data.stagedDates.map(date=>{
-    const sent=data.releasedDates.includes(date);
-    const count=data.orders.filter(order=>order.work_date===date).length;
-    return `<button type="button" data-release-date="${date}" ${sent||releasing||resetting||!count?'disabled':''}>11월 ${date.slice(-2)}일 · ${count}건 ${sent?'전송 완료':'허브로 전송'}</button>`;
-  }).join('');
+  const sent=data.releasedDates.includes(date);
+  const staged=data.stagedDates.includes(date);
+  $('release-panel').hidden=!staged;
+  const release=$('release-date');
+  release.hidden=sent;
+  release.disabled=releasing||resetting;
+  release.textContent=`11월 ${date.slice(-2)}일 허브로 전송`;
+  if(sent&&staged)$('release-result').textContent='지역 허브 전송 완료';
+  if(data.clock){
+    $('shared-clock').textContent=`${data.clock.date} ${data.clock.time} · 한국시간`;
+    if(!formEdited){
+      $('clock-date').value=data.clock.date;
+      $('clock-time').value=data.clock.time;
+    }
+  }
   $('orders').innerHTML=rows.map(order=>`<tr><td>${String(order.display_number).padStart(3,'0')}</td>
     <td>${esc(new Date(order.created_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'}))}<small>배송 ${esc(order.work_date)} · ${slots[order.segment]??'시간 미정'}</small></td>
     <td>${esc(order.recipient)}</td><td>${esc(order.product)} · ${order.quantity}개</td>
@@ -40,18 +52,20 @@ async function refresh(){
     if(!$('province').options.length){$('province').replaceChildren(...data.provinces.map(name=>new Option(name,name)));$('province').value='경상남도'}
     if ($('history-date').options.length===1) {
       $('history-date').append(...data.historyDates.map(date=>new Option(date,date)));
+      $('clock-date').replaceChildren(...data.historyDates.map(date=>new Option(date,date)));
     }
     render();
-    $('reset-demo').disabled=resetting||releasing;
+    $('reset-demo').disabled=resetting||releasing||settingClock;
+    $('clock-apply').disabled=settingClock||resetting;
   }catch{$('count').textContent='메인 서버 주문을 불러오지 못했습니다.';$('server-state').textContent='메인 서버 연결 끊김';$('server-state').dataset.offline='true'}
 }
 $('all').onclick=()=>{regional=false;render()};
 $('regional').onclick=()=>{regional=true;render()};
 $('province').onchange=render;
-$('history-date').onchange=render;
+$('history-date').onchange=()=>{$('release-result').textContent='';render()};
 $('history-slot').onchange=render;
-$('release-days').onclick=async event=>{
-  const date=event.target.closest('[data-release-date]')?.dataset.releaseDate;
+$('release-date').onclick=async()=>{
+  const date=$('history-date').value;
   if(!date||releasing||resetting)return;
   releasing=true;
   $('reset-demo').disabled=true;
@@ -65,8 +79,27 @@ $('release-days').onclick=async event=>{
   }catch(error){$('release-result').textContent=error.message||'전송하지 못했습니다.'}
   finally{releasing=false;$('reset-demo').disabled=false;render()}
 };
+$('clock-form').oninput=()=>{formEdited=true};
+$('clock-form').onsubmit=async event=>{
+  event.preventDefault();
+  if(settingClock||resetting)return;
+  settingClock=true;
+  $('clock-apply').disabled=true;
+  $('reset-demo').disabled=true;
+  try{
+    const response=await fetch('/api/central/clock',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({date:$('clock-date').value,time:$('clock-time').value})});
+    const result=await response.json();
+    if(!response.ok)throw Error(result.error);
+    data.clock=result;
+    formEdited=false;
+    $('clock-result').textContent='모든 시연 화면에 시간을 적용했습니다.';
+    render();
+  }catch(error){$('clock-result').textContent=error.message}
+  finally{settingClock=false;$('clock-apply').disabled=false;$('reset-demo').disabled=releasing}
+};
 $('reset-demo').onclick=async()=>{
-  if(resetting||releasing||!confirm('모든 배차·배송 기록을 초기화할까요? 9–11일 기본 주문 300건을 복원하고 12–13일 200건을 허브 전송 대기로 되돌립니다. 추가 접수 주문은 별도로 보관합니다.'))return;
+  if(resetting||releasing||settingClock||!confirm('모든 배차·배송 기록을 초기화할까요? 9–11일 기본 주문 300건을 복원하고 12–13일 200건을 허브 전송 대기로 되돌립니다. 추가 접수 주문은 별도로 보관합니다.'))return;
   resetting=true;
   $('reset-demo').disabled=true;
   render();
@@ -79,10 +112,11 @@ $('reset-demo').onclick=async()=>{
     $('history-date').value='all';
     $('history-slot').value='all';
     $('release-result').textContent='';
+    formEdited=false;
     await refresh();
     $('reset-result').textContent=`초기화 완료 · 허브 주문 ${result.count}건 · 허브 전송 대기 ${result.staged}건 · 추가 주문 ${result.archived}건 보관`;
   }catch(error){$('reset-result').textContent=error.message||'전체 리셋을 완료하지 못했습니다.'}
   finally{resetting=false;$('reset-demo').disabled=false;render()}
 };
 await refresh();
-setInterval(()=>{if(!resetting&&!releasing)void refresh()},3000);
+setInterval(()=>{if(!resetting&&!releasing&&!settingClock)void refresh()},3000);

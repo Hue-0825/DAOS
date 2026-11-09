@@ -86,7 +86,7 @@ function isMobileDevice(device) {
 }
 const mobile = isMobileDevice(navigator);
 document.documentElement.classList.toggle('driver-mobile', mobile);
-const blank = () => ({ snapshot: null, pending: [], confirmed: [], demoOffline: false, demoDate: null, demoTime: null, baseline: false, baselineEvents: [], completedDays: {} });
+const blank = () => ({ snapshot: null, pending: [], confirmed: [], demoOffline: false, baseline: false, baselineEvents: [], completedDays: {} });
 let db = blank();
 let readError = false;
 let province = DEFAULT_PROVINCE;
@@ -118,9 +118,18 @@ let noticeTimer;
 const timezone = { timeZone: 'Asia/Seoul' };
 const DEMO_DATES=['2026-11-09','2026-11-10','2026-11-11','2026-11-12','2026-11-13'];
 const timeFormat = new Intl.DateTimeFormat('ko-KR', { ...timezone, hour:'2-digit', minute:'2-digit', hour12:false });
-const dateKey=(offset=0)=>DEMO_DATES[offset];
-const workDate=()=>DEMO_DATES.includes(db.demoDate)?db.demoDate:dateKey();
-$('clock-day').replaceChildren(...DEMO_DATES.map((date,index)=>new Option(date,String(index))));
+const clockKey=`${KEY_BASE}.clock`;
+let sharedClock={date:DEMO_DATES[0],time:'06:00'};
+function updateClock(clock) {
+  if(!DEMO_DATES.includes(clock?.date)||typeof clock.time!=='string')return false;
+  if(sharedClock.date===clock.date&&sharedClock.time===clock.time)return false;
+  if(sharedClock.date!==clock.date)selected=null;
+  sharedClock=clock;
+  try{localStorage.setItem(clockKey,JSON.stringify(clock))}catch{}
+  return true;
+}
+try{updateClock(JSON.parse(localStorage.getItem(clockKey)))}catch{}
+const workDate=()=>sharedClock.date;
 function dateLabel(key) {
   const [, month, date] = key.split('-');
   return `${Number(month)}/${Number(date)}`;
@@ -210,9 +219,7 @@ function segmentsOn(date) {
 function nextSegment(date) {
   return segmentsOn(date).find(segment => segment.jobs.some(job => stateFor(job) !== 'delivered'));
 }
-function clockTime() {
-  return db.demoDate === workDate() ? db.demoTime : null;
-}
+const clockTime=()=>sharedClock.time;
 const locationFor=job=>job.place?{...PLACES[job.drop],...job.place,name:job.place.label}:PLACES[job.drop];
 function mapFor(segment) {
   return MAPS[segment ? locationFor(segment.jobs[0])?.region??'campus' : 'campus'];
@@ -251,8 +258,6 @@ function render() {
   const delivered = archived ? total : dayJobs.filter(item => stateFor(item) === 'delivered').length;
   const finished = total > 0 && delivered === total;
   const picked = hasPickup(displayedDate);
-  const previewing = displayedDate !== dateKey();
-  const previewLabel = '선택일';
   const job = jobs.find(item => item.key === selected) ?? jobs.find(item => stateFor(item) !== 'delivered');
   selected = job?.key ?? null;
   const offline = !connected;
@@ -297,12 +302,9 @@ function render() {
   $('storage-summary').innerHTML = db.baseline
     ? '<p class="storage-total"><strong>0일치</strong> · 기존 방식에서는 서버에서만 작업표를 조회합니다.</p>'
     : summary;
-  $('preview-date').textContent = previewing ? '오늘로 돌아가기' : '다음날 작업 열기';
-  $('preview-date').disabled = !previewing && !jobsOn(dateKey(1)).length;
-  $('clock-reset').disabled = !previewing && !time;
-  $('preview-banner').hidden = !previewing && !time;
-  $('preview-banner').textContent = `시연 시간 · ${previewing ? previewLabel : '오늘'} ${dateLabel(displayedDate)}${time ? ` ${time}` : ''} · 한국시간`;
-  $('work-title').textContent = previewing ? `${previewLabel} 배정된 작업 · 시연` : '오늘 배정된 작업';
+  $('preview-banner').hidden=false;
+  $('preview-banner').textContent=`메인 서버 시연 시간 · ${dateLabel(displayedDate)} ${time} · 한국시간`;
+  $('work-title').textContent='운행일 배정 작업';
   $('backup').hidden = !offline || db.baseline || !db.snapshot;
   $('backup').innerHTML = `<div class="backup-title"><h2>오프라인 작업표</h2><p>배송 순서와 시연 시각에 따라 저장된 작업을 이어갑니다.</p></div>${summary}`;
   $('pickup-summary').hidden = !dayJobs.length;
@@ -332,7 +334,7 @@ function render() {
     : '';
   $('map-title').textContent = activeMap.title;
   $('viewport').setAttribute('aria-label', activeMap.title);
-  $('work-date').textContent = `${previewing ? '선택일 시연' : '오늘'} ${dateLabel(displayedDate)} · ${segment ? `${segment.slot} · ${segment.index + 1}구간 ${activeMap.name} · ${offline ? '기기에 저장된 6시간 구간' : '6시간 배송 구간'}` : waiting ? `${waiting.slot.slice(0, 5)}부터 다음 구간 시작` : '현재 열려 있는 구간 없음'}`;
+  $('work-date').textContent = `${dateLabel(displayedDate)} · ${segment ? `${segment.slot} · ${segment.index + 1}구간 ${activeMap.name} · ${offline ? '기기에 저장된 6시간 구간' : '6시간 배송 구간'}` : waiting ? `${waiting.slot.slice(0, 5)}부터 다음 구간 시작` : '현재 열려 있는 구간 없음'}`;
   $('progress').textContent = `하루 배송 ${delivered} / ${total}건 완료`;
   $('jobs').innerHTML = jobs.length ? jobs.map(item => {
     const state = stateFor(item);
@@ -394,15 +396,17 @@ async function driverRequest(path, body) {
   url.searchParams.set('province',province);
   if(native){
     const reply=await native.postMessage({path:url.pathname+url.search,body:body??null});
-    if(reply.status!==200)throw new Error('기사 서버 연결 끊김');
-    return JSON.parse(reply.body);
+    const result=JSON.parse(reply.body);
+    if(reply.status!==200)throw Object.assign(new Error('기사 서버 연결 끊김'),{clock:result.clock});
+    return result;
   }
   const response = await fetch(url, options);
   if (response.status === 401 || response.status === 403 || !response.headers.get('content-type')?.includes('application/json')) {
     throw new Error('기사 서버 로그인 필요');
   }
-  if (!response.ok) throw new Error('기사 서버 연결 끊김');
-  return response.json();
+  const result=await response.json();
+  if (!response.ok) throw Object.assign(new Error('기사 서버 연결 끊김'),{clock:result.clock});
+  return result;
 }
 async function recordEvent(key, date, state, message) {
   // LAN previews can be opened before HTTPS is configured.
@@ -459,19 +463,18 @@ async function refresh() {
   const wasConnected = connected;
   let changed = false;
   try {
+    const { jobs, revision, events:remote, resets={}, resetRevision=0, clock } = await driverRequest(`?mode=${mode}`);
+    changed=updateClock(clock);
     const requestedDate=workDate();
-    const { jobs, revision, events:remote, resets={}, resetRevision=0 } = await driverRequest(`?mode=${mode}&date=${requestedDate}`);
     if(resetRevision && resetRevision!==db.resetRevision){
       if(!save({...blank(),resets,resetRevision}))return;
       selected=null;
       serverJobs=[];
       serverEvents=[];
-      updateClockControls();
       toast('전체 시연이 초기화됐습니다.');
       changed=true;
-      if(mode==='baseline'||requestedDate!==workDate())return;
+      if(mode==='baseline')return;
     }
-    if(requestedDate!==workDate())return;
     const cleared = Object.keys(resets).filter(date=>resets[date] !== db.resets?.[date]);
     const keep = event=>!cleared.includes(event.date);
     if(cleared.length){
@@ -495,7 +498,7 @@ async function refresh() {
       .map(event => [event.id,event])).values()];
     const pending = db.pending.filter(event => !acknowledged.has(event.id));
     const completions = completedDays(jobs, [...confirmed,...pending]);
-    const retain = (db.snapshot?.jobs ?? []).filter(job => job.date < dateKey() && completions[job.date]);
+    const retain = (db.snapshot?.jobs ?? []).filter(job => job.date < requestedDate && completions[job.date]);
     const available = [...jobs,...retain].filter(job => !expired(completions[job.date]));
     changed = changed || !db.snapshot || db.snapshot.revision !== revision
       || db.snapshot.date !== requestedDate || pending.length !== db.pending.length
@@ -508,7 +511,8 @@ async function refresh() {
       save({ ...db, snapshot:{ ...db.snapshot, receipt:revision } });
     }
     if (acknowledged.size) toast(`배송 기록 ${acknowledged.size}건을 서버에 동기화했습니다.`);
-  } catch {
+  } catch(error) {
+    changed=updateClock(error.clock)||changed;
     connected = false;
   } finally {
     busy = false;
@@ -538,27 +542,6 @@ function setMode(baseline) {
 }
 $('mode-daos').addEventListener('click', () => setMode(false));
 $('mode-baseline').addEventListener('click', () => setMode(true));
-function updateClockControls() {
-  $('clock-day').value = String(DEMO_DATES.indexOf(workDate()));
-  $('clock-time').value = clockTime() ?? '06:00';
-}
-function setClock(date, time) {
-  if (!save({ ...db, demoDate: date, demoTime: time })) return;
-  selected = null;
-  updateClockControls();
-  render();
-  void refresh();
-}
-$('demo-clock').addEventListener('submit', event => {
-  event.preventDefault();
-  setClock(dateKey(Number($('clock-day').value)), $('clock-time').value);
-});
-$('clock-reset').addEventListener('click', () => setClock(null, null));
-$('preview-date').addEventListener('click', () => {
-  const tomorrow = dateKey(1);
-  if (workDate() !== dateKey()) setClock(null, null);
-  else if (jobsOn(tomorrow).length) setClock(tomorrow, null);
-});
 $('driver-province').addEventListener('change', () => {
   if (busy) { $('driver-province').value=province; return; }
   province=$('driver-province').value;
@@ -568,7 +551,6 @@ $('driver-province').addEventListener('change', () => {
   serverJobs=[];
   serverEvents=[];
   selected=null;
-  updateClockControls();
   render();
   void refresh();
 });
@@ -576,12 +558,10 @@ $('settings').addEventListener('click', () => {
   const panel = $('demo-panel');
   panel.hidden = !panel.hidden;
   $('settings').setAttribute('aria-expanded', String(!panel.hidden));
-  if (!panel.hidden) updateClockControls();
 });
 $('reset').addEventListener('click', () => {
   if (!confirm('이 기기에 저장된 작업표와 미전송 기록을 지울까요?')) return;
   if (busy || !save(blank())) return;
-  updateClockControls();
   connected = false;
   selected = null;
   void refresh();

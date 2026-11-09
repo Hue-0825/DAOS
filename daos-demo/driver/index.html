@@ -8,8 +8,8 @@
 <title>DAOS Driver · 지역 허브</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="manifest" href="app.webmanifest">
-<link rel="stylesheet" href="style.css?v=20">
-<script type="module" src="app.mjs?v=20"></script>
+<link rel="stylesheet" href="style.css?v=21">
+<script type="module" src="app.mjs?v=21"></script>
 </head>
 <body>
 <header class="top">
@@ -32,14 +32,7 @@
     <div class="settings-head"><h2 id="settings-title">설정</h2><button id="reset" type="button" class="secondary">기기 저장 초기화</button></div>
     <div class="date-preview"><label>기사 시·도 <select id="driver-province"></select></label><p>선택한 허브에서 확정한 작업만 표시합니다.</p></div>
     <div id="storage-summary"></div>
-    <form id="demo-clock" class="date-preview">
-      <label>시연 날짜 <select id="clock-day"></select></label>
-      <label>시연 시각 <input id="clock-time" type="time" value="06:00" required></label>
-      <button class="secondary" type="submit">시연 시간 적용</button>
-      <button id="clock-reset" class="secondary" type="button">현재 날짜로 돌아가기</button>
-      <button id="preview-date" class="secondary" type="button">다음날 작업 열기</button>
-      <p>한국시간 기준 · 설정한 시각이 구간 시작 시각을 지나고 앞 구간을 마치면 배송할 수 있습니다.</p>
-    </form>
+    <p>시연 날짜와 시간은 메인 서버에서 설정합니다.</p>
   </section>
   <section class="status-bar" id="status" aria-live="polite"></section>
   <section id="backup" class="backup card" aria-label="저장된 작업표" hidden></section>

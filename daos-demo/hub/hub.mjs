@@ -7,6 +7,7 @@ let data;
 let busy=false;
 function render(){
   if(!data)return;
+  if(data.clock)$('shared-clock').textContent=`시연 시간 · ${data.clock.date} ${data.clock.time} · 한국시간`;
   const date=$('dispatch-date').value;
   const orders=data.orders.filter(order=>order.work_date===date);
   const groups=new Map();

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DAOS 스마트 물류 | 서버 장애 대응 시연</title>
+  <meta name="description" content="DAOS는 서버 장애 중에도 기사 앱에 저장된 작업표로 배송을 이어가고, 연결 복구 후 완료 기록을 동기화하는 스마트 물류 시연 프로젝트입니다.">
+  <meta property="og:type" content="website">
+  <link rel="canonical" href="https://daos-logistics.ryker6365.chatgpt.site/">
+  <meta property="og:url" content="https://daos-logistics.ryker6365.chatgpt.site/">
+  <meta property="og:title" content="DAOS 스마트 물류 | 서버 장애 대응 시연">
+  <meta property="og:description" content="서버 연결을 끊고 기존 방식과 DAOS의 배송 작업 흐름을 비교해 보세요.">
+  <link rel="stylesheet" href="style.css">
+  <script src="demo.js" defer></script>
+</head>
+<body>
+  <header class="shell bar"><a class="brand" href="#top">DAOS <span>스마트 물류</span></a><a href="#demo">시연 열기 ↓</a></header>
+  <main class="shell" id="top">
+    <section class="hero">
+      <p class="eyebrow">스마트 물류 경진대회 프로젝트</p>
+      <h1>서버가 멈춰도<br>배송은 이어집니다.</h1>
+      <p class="lead">DAOS는 기사 기기에 미리 저장한 작업표로 서버 장애 중 배송을 계속하고, 연결이 돌아오면 완료 기록을 동기화합니다.</p>
+      <a class="primary" href="#demo">장애 대응 체험하기</a>
+    </section>
+    <section class="flow" aria-labelledby="flow-title">
+      <h2 id="flow-title">주문이 기사에게 도착하기까지</h2>
+      <ol>
+        <li><span>01</span><strong>스토어</strong><p>지도에 등록된 배송지를 골라 주문합니다.</p></li>
+        <li><span>02</span><strong>메인 관제센터</strong><p>주문을 모아 담당 지역 허브로 전송합니다.</p></li>
+        <li><span>03</span><strong>지역 허브</strong><p>배송일과 시간대별로 기사에게 작업을 배차합니다.</p></li>
+        <li><span>04</span><strong>기사 앱</strong><p>운행일과 다음날의 작업표를 기기에 저장합니다.</p></li>
+      </ol>
+    </section>
+    <section id="demo" aria-labelledby="demo-title">
+      <p class="eyebrow">가상 배송 3건</p>
+      <h2 id="demo-title">서버 연결을 끊어 보세요</h2>
+      <p class="lead">기존 방식과 DAOS에 같은 장애를 적용합니다. 서버를 복구하면 DAOS의 미동기화 건수가 줄어드는 것을 확인할 수 있습니다.</p>
+      <div class="demo-tools">
+        <button type="button" class="primary" id="connection">서버 연결 끊기</button>
+        <button type="button" class="secondary" id="reset">처음부터</button>
+        <span id="server" role="status">서버 연결됨</span>
+      </div>
+      <div class="compare">
+        <article aria-labelledby="baseline-title">
+          <h3 id="baseline-title">기존 방식</h3><p id="baseline-state"></p><strong class="counter" id="baseline-count">0 / 3건</strong>
+          <button type="button" class="secondary" id="baseline-deliver">다음 배송 완료</button>
+        </article>
+        <article aria-labelledby="daos-title">
+          <h3 id="daos-title">DAOS</h3><p id="daos-state"></p><strong class="counter" id="daos-count">0 / 3건</strong>
+          <button type="button" class="primary" id="daos-deliver">다음 배송 완료</button>
+        </article>
+      </div>
+      <p class="note">이 화면은 가상 배송을 브라우저에서 체험하는 시연입니다.</p>
+      <noscript><p>배송 비교를 체험하려면 브라우저에서 자바스크립트를 켜 주세요.</p></noscript>
+    </section>
+  </main>
+  <footer class="shell">DAOS · 스마트 물류 경진대회 시연</footer>
+</body>
+</html>

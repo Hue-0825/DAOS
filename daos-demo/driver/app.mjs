@@ -110,6 +110,8 @@ let connected = false;
 let serverJobs = [];
 let serverEvents = [];
 let busy = false;
+let refreshInFlight;
+let serverSchedule=[];
 let shellReady = false;
 let displayedDate;
 
@@ -121,7 +123,7 @@ const timeFormat = new Intl.DateTimeFormat('ko-KR', { ...timezone, hour:'2-digit
 const clockKey=`${KEY_BASE}.clock`;
 let sharedClock={date:DEMO_DATES[0],time:'06:00'};
 function updateClock(clock) {
-  if(!DEMO_DATES.includes(clock?.date)||typeof clock.time!=='string')return false;
+  if(typeof clock?.date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(clock.date)||!Number.isFinite(Date.parse(clock.date))||typeof clock.time!=='string')return false;
   if(sharedClock.date===clock.date&&sharedClock.time===clock.time)return false;
   if(sharedClock.date!==clock.date)selected=null;
   sharedClock=clock;
@@ -130,6 +132,7 @@ function updateClock(clock) {
 }
 try{updateClock(JSON.parse(localStorage.getItem(clockKey)))}catch{}
 const workDate=()=>sharedClock.date;
+const tomorrow=date=>new Date(Date.parse(date)+86_400_000).toISOString().slice(0,10);
 function dateLabel(key) {
   const [, month, date] = key.split('-');
   return `${Number(month)}/${Number(date)}`;
@@ -221,9 +224,8 @@ function nextSegment(date) {
 }
 const clockTime=()=>sharedClock.time;
 const locationFor=job=>job.place?{...PLACES[job.drop],...job.place,name:job.place.label}:PLACES[job.drop];
-function mapFor(segment) {
-  return MAPS[segment ? locationFor(segment.jobs[0])?.region??'campus' : 'campus'];
-}
+const mapFor=job=>MAPS[job?locationFor(job)?.region??'campus':'campus'];
+const regionNames=jobs=>[...new Set(jobs.map(job=>mapFor(job).name))].join(' · ');
 function activeSegment(date = workDate()) {
   const next = nextSegment(date);
   const time = clockTime();
@@ -236,7 +238,7 @@ function backupSummary(date) {
   const descriptions = segments.map(segment => {
     const remaining = segment.jobs.filter(job => stateFor(job) !== 'delivered').length;
     const state = !remaining ? '완료' : date !== workDate() ? '해당일에 열림' : open?.index === segment.index ? '현재 구간' : waiting?.index === segment.index ? '시작 시각 대기' : '이전 구간 완료 후 열림';
-    return `<li><span>${segment.slot} · ${mapFor(segment).name} · ${segment.jobs.length}건</span><small>${state}</small></li>`;
+    return `<li><span>${segment.slot}${date===workDate()?` · ${escape(regionNames(segment.jobs))}`:''} · ${segment.jobs.length}건</span><small>${state}</small></li>`;
   }).join('');
   return `<div class="backup-day"><strong>${date === workDate() ? '운행일' : '다음날'} ${dateLabel(date)}</strong>${descriptions ? `<ul>${descriptions}</ul>` : '<p>저장된 작업 없음</p>'}</div>`;
 }
@@ -251,22 +253,22 @@ function render() {
   const segment = activeSegment(displayedDate);
   const waiting = segment ? null : nextSegment(displayedDate);
   const time = clockTime();
-  const jobs = segment?.jobs ?? [];
+  const jobs = (segment?.jobs??[]).filter(item=>stateFor(item)!=='delivered');
+  const completedJobs=dayJobs.filter(item=>stateFor(item)==='delivered'&&time>=SEGMENTS[segmentFor(item)].slice(0,5));
   const completion = db.baseline ? null : completionFor(displayedDate);
   const archived = !dayJobs.length && expired(completion);
   const total = archived ? completion.total : dayJobs.length;
   const delivered = archived ? total : dayJobs.filter(item => stateFor(item) === 'delivered').length;
   const finished = total > 0 && delivered === total;
   const picked = hasPickup(displayedDate);
-  const job = jobs.find(item => item.key === selected) ?? jobs.find(item => stateFor(item) !== 'delivered');
+  const job = jobs.find(item => item.key === selected) ?? jobs[0];
   selected = job?.key ?? null;
   const offline = !connected;
   const blocked = offline && db.baseline;
   $('workspace').hidden = blocked;
-  $('current-province').textContent = province;
   $('driver-hub-label').textContent = `${province} 허브`;
-  $('workspace').classList.toggle('workspace-no-map', !dayJobs.length && !finished);
-  $('map-card').hidden = finished || !dayJobs.length;
+  $('workspace').classList.toggle('workspace-no-map', !segment && !finished);
+  $('map-card').hidden = finished || !segment;
   $('completion').hidden = !finished;
   const cleanupNote = archived ? ' · 기기에서 완료 작업표를 삭제했습니다.'
     : !db.baseline && completion ? ' · 완료 6시간 후 작업표 자동 삭제' : '';
@@ -295,13 +297,21 @@ function render() {
   }
   const pending = db.baseline ? '' : db.pending.length ? `미동기화 기록 ${db.pending.length}건` : shellReady ? '오프라인 지도 준비됨' : '';
   $('status').innerHTML = `<span class="status-icon" aria-hidden="true">${offline ? '◈' : '✓'}</span><div class="status-text"><strong>${title}</strong> · ${status}</div><span class="sync-count${!db.baseline && db.pending.length ? ' pending-count' : ''}">${pending}</span>`;
-  const first=DEMO_DATES.indexOf(displayedDate);
-  const dates=DEMO_DATES.slice(first,first+2);
+  const dates=[displayedDate,tomorrow(displayedDate)];
   const count = dates.filter(date => jobsOn(date).length).length;
   const summary = `<p class="storage-total"><strong>${count}일치</strong> 작업표가 이 기기에 저장됨</p><div class="backup-days">${dates.map(backupSummary).join('')}</div>`;
   $('storage-summary').innerHTML = db.baseline
     ? '<p class="storage-total"><strong>0일치</strong> · 기존 방식에서는 서버에서만 작업표를 조회합니다.</p>'
     : summary;
+  const schedule=db.baseline?serverSchedule:db.snapshot?.schedule??[];
+  const scheduledDates=[...new Set([...DEMO_DATES.slice(0,3),displayedDate,...schedule.map(item=>item.date)])].sort();
+  $('schedule-days').innerHTML=scheduledDates.map(date=>{
+    const day=schedule.find(item=>item.date===date);
+    const names=date===displayedDate&&dayJobs.length?escape(regionNames(dayJobs)):'';
+    return `<div class="backup-day"><strong>${dateLabel(date)}${date===displayedDate?' · 운행일':''}</strong>
+      <p>${day?`허브 ${day.total}건 · 배차 ${day.assigned}건`:'배차 정보 대기'}</p>
+      ${names?`<p>${names}</p>`:''}</div>`;
+  }).join('');
   $('preview-banner').hidden=false;
   $('preview-banner').textContent=`메인 서버 시연 시간 · ${dateLabel(displayedDate)} ${time} · 한국시간`;
   $('work-title').textContent='운행일 배정 작업';
@@ -309,21 +319,21 @@ function render() {
   $('backup').innerHTML = `<div class="backup-title"><h2>오프라인 작업표</h2><p>배송 순서와 시연 시각에 따라 저장된 작업을 이어갑니다.</p></div>${summary}`;
   $('pickup-summary').hidden = !dayJobs.length;
   $('pickup-summary').innerHTML = `<div><strong>하루치 일괄 집하</strong><p>${pickupPoint()} · 하루 물량 ${dayJobs.length}건</p></div>
-    <button id="pickup-all" class="primary" type="button" ${picked || !segment || readError ? 'disabled' : ''}>${picked || !waiting && !segment ? '집하 완료' : '일괄 집하 완료 기록'}</button>`;
+    <button id="pickup-all" class="primary" type="button" ${picked || !segment || readError || busy ? 'disabled' : ''}>${picked || !waiting && !segment ? '집하 완료' : '일괄 집하 완료 기록'}</button>`;
   $('pickup-all').addEventListener('click', recordPickup);
   const departure = $('segment-start');
   departure.hidden = !segment || segment.index === 0 || hasStarted(displayedDate, segment.index);
-  departure.disabled = !picked || readError;
+  departure.disabled = !picked || readError || busy;
   departure.textContent = segment ? `${segment.index + 1}구간 배송 시작` : '';
-  const handoff = waiting ?? (!departure.hidden ? segment : null);
-  const activeMap = mapFor(segment ?? waiting);
+  const handoff = !departure.hidden ? segment : null;
+  const activeMap = mapFor(job);
   $('next-delivery').hidden = !handoff;
   if (handoff) {
     $('next-delivery-title').textContent = `다음 배송 권역은 ${activeMap.name}입니다`;
     $('next-delivery-time').textContent = `${handoff.slot} · ${handoff.jobs.length}건`;
   }
   const mapImage = $('map-image');
-  if (!finished && mapImage.getAttribute('src') !== activeMap.file) {
+  if (segment && mapImage.getAttribute('src') !== activeMap.file) {
     mapImage.src = activeMap.file;
     setZoom(1);
   }
@@ -336,9 +346,10 @@ function render() {
   $('viewport').setAttribute('aria-label', activeMap.title);
   $('work-date').textContent = `${dateLabel(displayedDate)} · ${segment ? `${segment.slot} · ${segment.index + 1}구간 ${activeMap.name} · ${offline ? '기기에 저장된 6시간 구간' : '6시간 배송 구간'}` : waiting ? `${waiting.slot.slice(0, 5)}부터 다음 구간 시작` : '현재 열려 있는 구간 없음'}`;
   $('progress').textContent = `하루 배송 ${delivered} / ${total}건 완료`;
-  $('jobs').innerHTML = jobs.length ? jobs.map(item => {
+  const listedJobs=[...jobs,...completedJobs];
+  $('jobs').innerHTML = listedJobs.length ? listedJobs.map(item => {
     const state = stateFor(item);
-    return `<button class="job" type="button" data-key="${escape(item.key)}" aria-pressed="${item.key === selected}">
+    return `<button class="job" type="button" data-key="${escape(item.key)}" aria-pressed="${item.key === selected}" ${state==='delivered'?'disabled':''}>
       <span class="job-top"><small>${escape(deliveryNumber(item))}</small><span class="pill ${state}">${STATES[state]}</span></span>
       <strong>${escape(item.title)}</strong><span class="pair">배송지 · ${escape(locationFor(item).name)}</span>
       <span class="job-end">${escape(item.cargo)}</span>
@@ -362,7 +373,7 @@ function renderDeliveryDetail(job) {
     : hasPending ? '기기에 저장됨 · 서버 복구 시 동기화' : '인계 장소와 현장 안내를 확인하세요.';
   detail.innerHTML = `<div class="detail-title"><h3>${escape(job.title)}</h3><span>${escape(deliveryNumber(job))} · ${SEGMENTS[segmentFor(job)]}</span></div>
     <div class="stop"><small>배송지</small><b>${escape(drop.name)}${drop.building ? ` · ${escape(drop.building)}` : ''}</b><p>${escape(job.to)}</p></div>
-    <div class="actions"><button id="record" class="primary" type="button" ${state !== 'picked' || readError ? 'disabled' : ''}>${label}</button><p>${note}</p></div>`;
+    <div class="actions"><button id="record" class="primary" type="button" ${state !== 'picked' || readError || busy ? 'disabled' : ''}>${label}</button><p>${note}</p></div>`;
   $('record').addEventListener('click', () => recordDelivery(job));
 }
 function pickupPoint() {
@@ -418,11 +429,13 @@ async function recordEvent(key, date, state, message) {
     busy = true;
     render();
     try {
+      await refreshInFlight;
+      if(!connected||date!==workDate()||!db.baseline)return;
       const result = await driverRequest('/events', { mode:'baseline', events:[event] });
       if (result.acknowledged.includes(event.id)) {
         serverEvents = [...serverEvents, event];
         toast('서버에 작업 기록을 반영했습니다.');
-      }
+      }else toast('서버에서 완료 기록을 확인하지 못했습니다.');
     } catch {
       connected = false;
     } finally {
@@ -450,20 +463,22 @@ function recordDelivery(job) {
   recordEvent(job.key, job.date, 'delivered', '배송 완료를 기기에 저장했습니다.');
 }
 
-async function refresh() {
+function refresh(){
+  if(!refreshInFlight&&!busy)refreshInFlight=loadWork().finally(()=>{refreshInFlight=null});
+  return refreshInFlight;
+}
+async function loadWork() {
   const removed = pruneExpired();
-  if (busy) return;
   if (!navigator.onLine) {
     connected = false;
     if (removed || displayedDate !== workDate()) render();
     return;
   }
-  busy = true;
   const mode = db.baseline ? 'baseline' : 'daos';
   const wasConnected = connected;
   let changed = false;
   try {
-    const { jobs, revision, events:remote, resets={}, resetRevision=0, clock } = await driverRequest(`?mode=${mode}`);
+    const { jobs, revision, events:remote, resets={}, resetRevision=0, clock, schedule=[] } = await driverRequest(`?mode=${mode}`);
     changed=updateClock(clock);
     const requestedDate=workDate();
     if(resetRevision && resetRevision!==db.resetRevision){
@@ -471,6 +486,7 @@ async function refresh() {
       selected=null;
       serverJobs=[];
       serverEvents=[];
+      serverSchedule=[];
       toast('전체 시연이 초기화됐습니다.');
       changed=true;
       if(mode==='baseline')return;
@@ -487,6 +503,8 @@ async function refresh() {
     if (mode === 'baseline') {
       changed = changed || JSON.stringify(serverJobs) !== JSON.stringify(jobs) || JSON.stringify(serverEvents) !== JSON.stringify(remote);
       serverJobs = jobs;
+      changed=changed||JSON.stringify(serverSchedule)!==JSON.stringify(schedule);
+      serverSchedule=schedule;
       serverEvents = remote;
       connected = true;
       return;
@@ -501,9 +519,9 @@ async function refresh() {
     const retain = (db.snapshot?.jobs ?? []).filter(job => job.date < requestedDate && completions[job.date]);
     const available = [...jobs,...retain].filter(job => !expired(completions[job.date]));
     changed = changed || !db.snapshot || db.snapshot.revision !== revision
-      || db.snapshot.date !== requestedDate || pending.length !== db.pending.length
+      || db.snapshot.date !== requestedDate || JSON.stringify(db.snapshot.schedule)!==JSON.stringify(schedule) || pending.length !== db.pending.length
       || confirmed.length !== db.confirmed.length;
-    if (changed && !save({ ...db, resets, snapshot:{ at:new Date().toISOString(), date:requestedDate, revision, jobs:available },
+    if (changed && !save({ ...db, resets, snapshot:{ at:new Date().toISOString(), date:requestedDate, revision, jobs:available,schedule },
       pending, confirmed, completedDays:completions })) return;
     connected = true;
     if (revision && db.snapshot.receipt !== revision) {
@@ -512,10 +530,10 @@ async function refresh() {
     }
     if (acknowledged.size) toast(`배송 기록 ${acknowledged.size}건을 서버에 동기화했습니다.`);
   } catch(error) {
-    changed=updateClock(error.clock)||changed;
-    connected = false;
+    connected=false;
+    try{changed=updateClock(await driverRequest('/clock'))||changed}
+    catch{changed=updateClock(error.clock)||changed}
   } finally {
-    busy = false;
     if (removed || displayedDate !== workDate() || wasConnected !== connected || changed) render();
   }
 }
@@ -534,7 +552,7 @@ $('segment-start').addEventListener('click', () => {
   recordEvent(startKey(date, segment.index), date, 'started', `${segment.index + 1}구간 배송을 시작했습니다.`);
 });
 function setMode(baseline) {
-  if (busy || Boolean(db.baseline) === baseline) return;
+  if (busy || refreshInFlight || Boolean(db.baseline) === baseline) return;
   if (!save({ ...db, baseline })) return;
   selected = null;
   render();
@@ -543,13 +561,14 @@ function setMode(baseline) {
 $('mode-daos').addEventListener('click', () => setMode(false));
 $('mode-baseline').addEventListener('click', () => setMode(true));
 $('driver-province').addEventListener('change', () => {
-  if (busy) { $('driver-province').value=province; return; }
+  if (busy || refreshInFlight) { $('driver-province').value=province; return; }
   province=$('driver-province').value;
   try{localStorage.setItem(`${KEY_BASE}.province`,province)}catch{}
   loadProvince();
   connected=false;
   serverJobs=[];
   serverEvents=[];
+  serverSchedule=[];
   selected=null;
   render();
   void refresh();
@@ -561,7 +580,7 @@ $('settings').addEventListener('click', () => {
 });
 $('reset').addEventListener('click', () => {
   if (!confirm('이 기기에 저장된 작업표와 미전송 기록을 지울까요?')) return;
-  if (busy || !save(blank())) return;
+  if (busy || refreshInFlight || !save(blank())) return;
   connected = false;
   selected = null;
   void refresh();

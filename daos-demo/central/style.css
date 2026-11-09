@@ -52,3 +52,5 @@ td strong{overflow-wrap:anywhere}
 #shared-clock{margin-left:8px;color:#554978;font-size:13px;font-weight:600}
 .clock-panel .toolbar{justify-content:flex-start;align-items:end;margin-top:12px}
 #release-panel{margin:10px 0}
+#connection-result{flex-basis:100%;font-weight:700}
+#connection-result:empty{display:none}

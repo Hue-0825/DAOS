@@ -1,7 +1,7 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DAOS 지역 허브</title><link rel="stylesheet" href="style.css?v=21"><script type="module" src="hub.mjs?v=21"></script></head>
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DAOS 지역 허브</title><link rel="stylesheet" href="style.css?v=22"><script type="module" src="hub.mjs?v=22"></script></head>
 <body><header><strong>DAOS 지역 허브</strong><span id="server-state" class="server-state" role="status">서버 확인 중</span></header><main>
-<div class="intro"><span>메인 서버 → 담당 기사</span><h1>지역 허브 운영실</h1><p>허브에 접수된 주문을 권역별로 배차합니다.</p><p id="shared-clock">시연 시간 확인 중</p></div>
-<div class="toolbar"><label>시·도 허브<select id="province"></select></label><button id="connection" disabled>서버 상태 확인 중</button></div>
+<div class="intro"><h1>지역 허브 운영실</h1><p id="shared-clock">시연 시간 확인 중</p></div>
+<div class="toolbar"><label>시·도 허브<select id="province"></select></label></div>
 <div class="toolbar reset-toolbar"><label>배송일<select id="dispatch-date"></select></label><button id="reset" class="cancel-button" type="button" disabled>배차 리셋</button><p id="reset-hint">시·도와 배송일을 선택하세요.</p></div>
 <section class="metrics"><article><small>허브 접수</small><strong id="count">—</strong></article><article><small>담당 기사</small><strong id="driver">—</strong></article><article><small>기사 기기 저장</small><strong id="backup">—</strong></article></section>
 <p id="notice" role="status"></p>

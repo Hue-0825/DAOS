@@ -34,8 +34,6 @@ function render(){
   $('count').textContent=`${orders.length}건`;
   $('driver').textContent=`${province} 시연 기사 1`;
   $('backup').textContent=!data.revision?'배차 확정 전':data.receipt?.revision===data.revision?'백업 완료':'기사 앱 저장 대기';
-  $('connection').disabled=busy;
-  $('connection').textContent=data.online?'메인 서버 연결 끊기':'메인 서버 복구';
   function groupList(dispatched){
     return [...groups.entries()].map(([key,{region,segment,rows:groupRows}])=>{
       const rows=groupRows.filter(order=>Boolean(order.dispatch_revision)===dispatched);
@@ -90,7 +88,7 @@ async function post(path,body,message){
   }catch(error){$('notice').textContent=error.message}
   finally{busy=false;await refresh()}
 }
-$('province').onchange=()=>{province=$('province').value;data=null;$('groups').replaceChildren();$('dispatches').replaceChildren();$('orders').replaceChildren();$('region-preview').hidden=true;$('reset').disabled=true;$('connection').disabled=true;void refresh()};
+$('province').onchange=()=>{province=$('province').value;data=null;$('groups').replaceChildren();$('dispatches').replaceChildren();$('orders').replaceChildren();$('region-preview').hidden=true;$('reset').disabled=true;void refresh()};
 $('dispatch-date').onchange=render;
 function selectMap(event){
   const button=event.target.closest('[data-map-group]');
@@ -113,6 +111,5 @@ $('reset').onclick=()=>{
   if(!confirm(`${date} ${province} 배차와 시연 배송 기록을 초기화할까요?`))return;
   void post('/api/hub/cancel',{province,date},result=>`${result.count}건 배차를 취소했습니다. 기사 앱은 연결 후 새 작업표를 받습니다.`);
 };
-$('connection').onclick=()=>void post('/api/ops/connection',{online:!data.online},()=>'기사 서버 상태를 변경했습니다.');
 await refresh();
 setInterval(()=>{if(!busy)void refresh()},3000);

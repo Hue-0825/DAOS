@@ -1,5 +1,5 @@
-const CACHE = 'daos-dispatch-driver-v7';
-const ASSETS = ['./', 'index.html', 'style.css?v=21', 'app.mjs?v=21', 'campus.svg?v=20', 'jangyu.svg', 'yangsan.svg', 'sangnam.svg', 'yulha.svg', 'buwon.svg', 'icon.svg', 'app.webmanifest', 'region-seoul.svg', 'region-busan.svg', 'region-daegu.svg', 'region-incheon.svg', 'region-gwangju.svg', 'region-daejeon.svg', 'region-ulsan.svg', 'region-sejong.svg', 'region-gyeonggi.svg', 'region-gangwon.svg', 'region-chungbuk.svg', 'region-chungnam.svg', 'region-jeonbuk.svg', 'region-jeonnam.svg', 'region-gyeongbuk.svg', 'region-jeju.svg'];
+const CACHE = 'daos-dispatch-driver-v8';
+const ASSETS = ['./', 'index.html', 'style.css?v=22', 'app.mjs?v=22', 'campus.svg?v=20', 'jangyu.svg', 'yangsan.svg', 'sangnam.svg', 'yulha.svg', 'buwon.svg', 'icon.svg', 'app.webmanifest', 'region-seoul.svg', 'region-busan.svg', 'region-daegu.svg', 'region-incheon.svg', 'region-gwangju.svg', 'region-daejeon.svg', 'region-ulsan.svg', 'region-sejong.svg', 'region-gyeonggi.svg', 'region-gangwon.svg', 'region-chungbuk.svg', 'region-chungnam.svg', 'region-jeonbuk.svg', 'region-jeonnam.svg', 'region-gyeongbuk.svg', 'region-jeju.svg'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting()));

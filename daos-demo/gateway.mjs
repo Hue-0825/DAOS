@@ -12,7 +12,7 @@ const media = {html:'text/html',css:'text/css',mjs:'text/javascript',js:'text/ja
 const root = role === 'driver' ? '/driver/' : '/';
 function allowed(path) {
   return role === 'driver' ? path === '/api/driver' || path.startsWith('/api/driver/')
-    : path.startsWith(prefixes[role]) || role === 'hub' && path === '/api/ops/connection';
+    : path.startsWith(prefixes[role]);
 }
 createServer(async (request,response) => {
   try {

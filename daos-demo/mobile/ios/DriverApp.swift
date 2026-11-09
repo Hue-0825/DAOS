@@ -85,7 +85,7 @@ final class DriverCoordinator: NSObject, WKURLSchemeHandler, WKNavigationDelegat
         guard message.frameInfo.request.url?.scheme == "daos",
               let payload = message.body as? [String:Any], let path = payload["path"] as? String,
               let url = URL(string: path, relativeTo: site)?.absoluteURL, url.host == site.host,
-              ["/api/driver","/api/driver/receipt","/api/driver/events"].contains(url.path),
+              ["/api/driver","/api/driver/clock","/api/driver/receipt","/api/driver/events"].contains(url.path),
               let store = web?.configuration.websiteDataStore.httpCookieStore else {
             replyHandler(nil, "요청 주소를 확인해 주세요."); return
         }

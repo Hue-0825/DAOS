@@ -15,10 +15,10 @@ const run = (db, sql, ...args) => args.length ? db.prepare(sql).bind(...args) : 
 const DEFAULT_PROVINCE = '경상남도';
 const provinceFrom = request => new URL(request.url).searchParams.get('province') ?? DEFAULT_PROVINCE;
 const versionSql=`SELECT COALESCE(MAX(revision),0) FROM (
-  SELECT revision FROM orders WHERE province = ? AND work_date BETWEEN ? AND ?
-  UNION ALL SELECT revision FROM dispatch_reset WHERE province = ? AND work_date BETWEEN ? AND ?
+  SELECT revision FROM orders WHERE province = ? AND work_date >= ?
+  UNION ALL SELECT revision FROM dispatch_reset WHERE province = ? AND work_date >= ?
 )`;
-const versionArgs=province=>[province,...windowDates(),province,...windowDates()];
+const versionArgs=province=>[province,dates()[0],province,dates()[0]];
 const revisionFor=(db,province)=>run(db,`SELECT (${versionSql}) AS revision`,...versionArgs(province));
 function modeFor(value,province) {
   const mode=value==='baseline'?'baseline':'daos';
@@ -63,7 +63,10 @@ const INITIAL_DATES=DEMO_DATES.slice(0,3);
 const STAGED_DATES=DEMO_DATES.slice(3);
 const GYEONGNAM_ROUTES=[['campus','jangyu','yangsan'],['sangnam','yulha','buwon'],['campus','yulha','yangsan'],['sangnam','jangyu','buwon'],['campus','yulha','yangsan']];
 const mapStop = place => Number.isFinite(place?.x)&&Number.isFinite(place?.y);
-const stopDates = region => routing.regions[region].province ? dates() : dates().filter((_,day)=>GYEONGNAM_ROUTES[day].includes(region));
+const QUEUE_START='2026-11-14';
+const DAILY_CAPACITY=100;
+const validDemoDate=date=>typeof date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(date)&&date>=dates()[0]
+  &&Number.isFinite(Date.parse(date))&&new Date(date).toISOString().slice(0,10)===date;
 const released=column=>`(${column} <= '2026-11-11' OR ${column} IN (SELECT work_date FROM hub_release))`;
 const dates=()=>DEMO_DATES;
 const windowDates=()=>[DEMO_DATES[0],DEMO_DATES.at(-1)];
@@ -120,24 +123,24 @@ async function intakeApi(request, db, path) {
     const control=await run(db,controlSql).all();
     const stops=Object.entries(places).filter(([,place])=>mapStop(place)).map(([id,place])=>{
       const route=routing.regions[place.region];
-      return {id,label:place.label,city:route.city,province:route.province??DEFAULT_PROVINCE,dates:stopDates(place.region)};
+      return {id,label:place.label,city:route.city,province:route.province??DEFAULT_PROVINCE};
     });
     return json({ dates:dates(), provinces:routing.provinces, products:routing.products, catalog:routing.catalog, stops,clock:clockView(control.results[0]) });
   }
   if (path === '/api/shop/orders' && request.method === 'POST') {
     const item = await request.json();
-    if (!item || !routing.provinces.includes(item.province) || !dates().includes(item.date)
+    if (!item || !routing.provinces.includes(item.province)
         || !Object.hasOwn(routing.products,item.product) || !Number.isInteger(item.quantity)
         || item.quantity < 1 || item.quantity > 99 || !isText(item.recipient,35)
         || typeof item.instructions !== 'string' || item.instructions.length > 100) {
-      return json({error:'배송일과 배송지, 주문 정보를 확인해 주세요.'},400);
+      return json({error:'배송지와 주문 정보를 확인해 주세요.'},400);
     }
     let city,address,destination,region,segment;
     if (item.destination!==undefined) {
-      const place=Object.hasOwn(places,item.destination)?places[item.destination]:null;
+      const place=typeof item.destination==='string'&&Object.hasOwn(places,item.destination)?places[item.destination]:null;
       const route=place&&routing.regions[place.region];
-      if (!mapStop(place)||(route.province??DEFAULT_PROVINCE)!==item.province||!stopDates(place.region).includes(item.date)) {
-        return json({error:'선택한 날짜와 시·도의 등록 배송지를 골라 주세요.'},400);
+      if (!mapStop(place)||(route.province??DEFAULT_PROVINCE)!==item.province) {
+        return json({error:'선택한 시·도의 등록 배송지를 골라 주세요.'},400);
       }
       [city,address,destination,region,segment]=[route.city,place.label,item.destination,place.region,route.segment];
     } else {
@@ -147,29 +150,47 @@ async function intakeApi(request, db, path) {
       [destination=null,region=null,segment=null]=routeAddress(item.province,city,address);
     }
     const id = crypto.randomUUID();
-    const result = await run(db, `INSERT INTO intake VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      id,new Date().toISOString(),item.date,item.province,city,address,item.recipient.trim(),
-      routing.products[item.product],item.quantity,item.instructions.trim(),destination,region,segment).run();
-    return json({ number:result.meta.last_row_id ?? result.meta.lastInsertRowid, province:item.province },201);
+    // Pick and insert in one SQL statement so simultaneous checkouts cannot overfill a day.
+    const result = await run(db,`WITH RECURSIVE limits(start,capacity) AS (VALUES (?,?)), queue(work_date) AS (
+      SELECT MAX(limits.start,date(demo_date,'+1 day'),
+        COALESCE((SELECT MAX(work_date) FROM intake WHERE work_date>=limits.start),limits.start),
+        COALESCE((SELECT date(MAX(work_date),'+1 day') FROM hub_release WHERE work_date>=limits.start),limits.start))
+      FROM control,limits WHERE id=1
+      UNION ALL
+      SELECT date(queue.work_date,'+1 day') FROM queue
+      WHERE (SELECT COUNT(*) FROM intake WHERE intake.work_date=queue.work_date)>=(SELECT capacity FROM limits)
+    )
+    INSERT INTO intake
+    SELECT ?, ?, queue.work_date, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM queue ORDER BY queue.work_date DESC LIMIT 1
+    RETURNING rowid AS number,work_date AS date`,QUEUE_START,DAILY_CAPACITY,id,new Date().toISOString(),item.province,city,address,item.recipient.trim(),
+      routing.products[item.product],item.quantity,item.instructions.trim(),destination,region,segment).all();
+    return json({...result.results[0],province:item.province},201);
+  }
+  if (path === '/api/central/connection' && request.method === 'POST') {
+    const {online}=await request.json();
+    if(typeof online!=='boolean')return json({error:'연결 상태를 확인해 주세요.'},400);
+    await run(db,'UPDATE control SET online=? WHERE id=1',Number(online)).run();
+    return json({online});
   }
   if (path === '/api/central/clock' && request.method === 'POST') {
     const {date,time}=await request.json();
-    if(!dates().includes(date)||typeof time!=='string'||!/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(time))return json({error:'시연 날짜와 시간을 확인해 주세요.'},400);
+    if(!validDemoDate(date)||typeof time!=='string'||!/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(time))return json({error:'시연 날짜와 시간을 확인해 주세요.'},400);
     await run(db,'UPDATE control SET demo_date=?, demo_time=? WHERE id=1',date,time).run();
     return json({date,time});
   }
   if (path === '/api/central/orders' && request.method === 'GET') {
     const [result,control,releases]=await db.batch([
-      run(db,`${intakeSql} WHERE intake.work_date BETWEEN ? AND ? ORDER BY intake.work_date,intake.segment IS NULL,intake.segment,intake.created_at,intake.rowid`,...windowDates()),
+      run(db,`${intakeSql} WHERE intake.work_date >= ? ORDER BY intake.work_date,CASE WHEN intake.work_date < ? THEN COALESCE(intake.segment,3) ELSE 0 END,intake.created_at,intake.rowid`,dates()[0],QUEUE_START),
       run(db,controlSql),run(db,'SELECT work_date FROM hub_release'),
     ]);
+    const historyDates=[...new Set([...dates(),...result.results.map(row=>row.work_date)])].sort();
     return json({ orders:result.results.map((row,index)=>({...row,display_number:index+1})), provinces:routing.provinces, regions:routing.regions,
-      online:Boolean(control.results[0].online), clock:clockView(control.results[0]),historyDates:dates(), stagedDates:STAGED_DATES,
+      online:Boolean(control.results[0].online), clock:clockView(control.results[0]),historyDates, stagedDates:historyDates.filter(date=>!INITIAL_DATES.includes(date)),
       releasedDates:[...INITIAL_DATES,...releases.results.map(row=>row.work_date)] });
   }
   if (path === '/api/central/release' && request.method === 'POST') {
     const {date}=await request.json();
-    if(!STAGED_DATES.includes(date))return json({error:'11월 12일 또는 13일을 선택하세요.'},400);
+    if(!validDemoDate(date)||INITIAL_DATES.includes(date))return json({error:'전송할 배송일을 선택하세요.'},400);
     const [,count]=await db.batch([
       run(db,'INSERT OR IGNORE INTO hub_release SELECT ? WHERE EXISTS (SELECT 1 FROM intake WHERE work_date=?)',date,date),
       run(db,'SELECT COUNT(*) AS count FROM intake WHERE work_date=?',date),
@@ -187,6 +208,9 @@ async function intakeApi(request, db, path) {
       run(db,'UPDATE control SET online=1, revision=revision+1, reset_revision=revision+1, demo_date=?, demo_time=? WHERE id=1',dates()[0],'06:00'),
       run(db,`INSERT OR IGNORE INTO demo_reset_archive SELECT * FROM intake WHERE ${extra}`,...activeWindow),
       run(db,`DELETE FROM intake WHERE ${extra}`,...activeWindow),
+      run(db,`INSERT INTO dispatch_reset (province,work_date,revision)
+        SELECT orders.province,orders.work_date,control.reset_revision FROM orders,control WHERE control.id=1
+        ON CONFLICT(province,work_date) DO UPDATE SET revision=excluded.revision`),
       run(db,'DELETE FROM events'),
       run(db,'DELETE FROM orders'),
       run(db,'DELETE FROM province_receipt'),
@@ -222,7 +246,7 @@ async function intakeApi(request, db, path) {
     const province=provinceFrom(request);
     if(!routing.provinces.includes(province))return json({error:'허브를 선택해 주세요.'},400);
     const [intake,control,revision,receipt,releases] = await db.batch([
-      run(db,`${intakeSql} WHERE intake.province = ? AND intake.work_date BETWEEN ? AND ? AND ${released('intake.work_date')} ORDER BY intake.work_date,intake.segment,intake.rowid`,province,...windowDates()),
+      run(db,`${intakeSql} WHERE intake.province = ? AND intake.work_date >= ? AND ${released('intake.work_date')} ORDER BY intake.work_date,intake.segment,intake.rowid`,province,dates()[0]),
       run(db,controlSql),revisionFor(db,province),
       run(db,'SELECT revision, saved_at FROM province_receipt WHERE province = ?',province),
       run(db,'SELECT work_date FROM hub_release ORDER BY work_date'),
@@ -234,29 +258,26 @@ async function intakeApi(request, db, path) {
   if (path === '/api/hub/dispatch' && request.method === 'POST') {
     const { province, date, region, segment:routedSegment } = await request.json();
     const route=routing.regions[region];
-    if (!routing.provinces.includes(province) || !dates().includes(date) || !Object.hasOwn(routing.regions,region)
+    if (!routing.provinces.includes(province) || !validDemoDate(date) || !Object.hasOwn(routing.regions,region)
         || (route.province??DEFAULT_PROVINCE)!==province || (routedSegment!==undefined&&![0,1,2].includes(routedSegment))) {
       return json({error:'해당 허브에 전송된 배송 권역만 배차할 수 있습니다.'},400);
     }
     const segment=routedSegment??route.segment;
-    const sameRegion = Object.keys(places).filter(key=>places[key].region === region);
     const [insert] = await db.batch([
       run(db,`INSERT OR IGNORE INTO orders (id,work_date,segment,title,cargo,destination,instructions,revision,province)
         SELECT intake.id,intake.work_date,intake.segment,intake.product,intake.quantity || '개',intake.destination,
           intake.address || CASE WHEN intake.instructions <> '' THEN ' · ' || intake.instructions ELSE '' END,
           (SELECT revision + 1 FROM control WHERE id = 1),intake.province
         FROM intake WHERE province = ? AND work_date = ? AND region = ? AND segment = ? AND destination IS NOT NULL
-        AND ${released('intake.work_date')}
-        AND NOT EXISTS (SELECT 1 FROM orders WHERE province = ? AND work_date = ? AND segment = ? AND destination NOT IN (${sameRegion.map(()=>'?').join(',')}))`,
-        province,date,region,segment,province,date,segment,...sameRegion),
+        AND ${released('intake.work_date')}`,province,date,region,segment),
       run(db,`UPDATE control SET revision = revision + 1 WHERE id = 1
         AND EXISTS (SELECT 1 FROM orders WHERE orders.revision = control.revision + 1)`),
     ]);
-    return insert.meta.changes ? json({count:insert.meta.changes}) : json({error:'허브에 전송된 대기 주문이 없거나 같은 시간대에 다른 권역이 이미 배차됐습니다.'},409);
+    return insert.meta.changes ? json({count:insert.meta.changes}) : json({error:'허브에 전송된 배차 대기 주문이 없습니다.'},409);
   }
   if(path==='/api/hub/cancel' && request.method==='POST'){
     const {province,date}=await request.json();
-    if(!routing.provinces.includes(province)||!dates().includes(date))return json({error:'취소할 지역과 배송일을 확인해 주세요.'},400);
+    if(!routing.provinces.includes(province)||!validDemoDate(date))return json({error:'취소할 지역과 배송일을 확인해 주세요.'},400);
     const exists='EXISTS(SELECT 1 FROM orders WHERE province = ? AND work_date = ? AND revision IS NOT NULL)';
     const reset='EXISTS(SELECT 1 FROM dispatch_reset WHERE province = ? AND work_date = ? AND revision=(SELECT revision FROM control WHERE id=1))';
     const [version,,,removed]=await db.batch([
@@ -321,17 +342,25 @@ async function api(request, db, path) {
   if (path === '/api/driver' || path.startsWith('/api/driver/')) {
     const province=provinceFrom(request);
     if(!routing.provinces.includes(province))return json({error:'기사 앱의 시·도를 확인해 주세요.'},400);
+    if (path === '/api/driver/clock' && method === 'GET') {
+      const control=await run(db,controlSql).all();
+      return json(clockView(control.results[0]));
+    }
     if (path === '/api/driver' && method === 'GET') {
       const params=new URL(request.url).searchParams;
       const mode=modeFor(params.get('mode'),province);
-      const [control,revision,jobs,events,resets] = await db.batch([
+      const [control,revision,jobs,events,resets,schedule] = await db.batch([
         run(db,controlSql),revisionFor(db,province),run(db,publishedSql,province),
         run(db,`SELECT id, job_key AS key, work_date AS date, state, recorded_at AS at FROM events WHERE mode = ? AND work_date BETWEEN ${driverWindow}`,mode),
         run(db,'SELECT work_date AS date,revision FROM dispatch_reset WHERE province = ?',province),
+        run(db,`SELECT intake.work_date AS date, COUNT(*) AS total, COUNT(orders.revision) AS assigned
+          FROM intake LEFT JOIN orders ON intake.id=orders.id
+          WHERE intake.province=? AND intake.work_date>=? AND ${released('intake.work_date')}
+          GROUP BY intake.work_date ORDER BY intake.work_date`,province,dates()[0]),
       ]);
       const clock=clockView(control.results[0]);
       if(!control.results[0].online)return json({error:'메인 서버 연결 끊김',clock},503);
-      return json({clock,revision:revision.results[0].revision,resetRevision:control.results[0].reset_revision,jobs:jobs.results.map(jobView),events:events.results,resets:Object.fromEntries(resets.results.map(reset=>[reset.date,reset.revision]))});
+      return json({clock,schedule:schedule.results,revision:revision.results[0].revision,resetRevision:control.results[0].reset_revision,jobs:jobs.results.map(jobView),events:events.results,resets:Object.fromEntries(resets.results.map(reset=>[reset.date,reset.revision]))});
     }
     if (path === '/api/driver/receipt' && method === 'POST') {
       const { revision } = await request.json();
@@ -371,11 +400,11 @@ export default {
       const token = request.headers.get('X-DAOS-Service-Key');
       if (hostedSplit) {
         const shop = token === env.DAOS_SHOP_TOKEN && pathname.startsWith('/api/shop/');
-        const hub = token === env.DAOS_HUB_TOKEN && (pathname.startsWith('/api/hub/') || pathname === '/api/ops/connection');
+        const hub = token === env.DAOS_HUB_TOKEN && pathname.startsWith('/api/hub/');
         const driver = token === env.DAOS_DRIVER_TOKEN && (pathname === '/api/driver' || pathname.startsWith('/api/driver/'));
         const consoleView = Boolean(request.headers.get('oai-authenticated-user-id')) && (
           (pathname === '/api/central/orders' && request.method === 'GET') ||
-          (['/api/central/reset','/api/central/release','/api/central/clock'].includes(pathname) && request.method === 'POST' && request.headers.get('Origin') === new URL(request.url).origin)
+          (['/api/central/reset','/api/central/release','/api/central/clock','/api/central/connection'].includes(pathname) && request.method === 'POST' && request.headers.get('Origin') === new URL(request.url).origin)
         );
         const seed = pathname === '/api/central/seed' && request.method === 'POST'
           && Boolean(env.DAOS_SEED_TOKEN) && token === env.DAOS_SEED_TOKEN;

@@ -3,7 +3,7 @@ const media = {html:'text/html',css:'text/css',mjs:'text/javascript',js:'text/ja
 const json=(value,status)=>Response.json(value,{status,headers:{'Cache-Control':'no-store'}});
 function allowed(path) {
   if(ROLE==='driver')return path==='/api/driver'||path.startsWith('/api/driver/');
-  return path.startsWith(`/api/${ROLE}/`) || ROLE==='hub' && path==='/api/ops/connection';
+  return path.startsWith(`/api/${ROLE}/`);
 }
 export default {
   async fetch(request,env) {

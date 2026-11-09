@@ -10,7 +10,7 @@ function complete(order) {
   $('catalog-view').hidden=true;
   $('product-view').hidden=true;
   $('complete-view').hidden=false;
-  $('confirmation').textContent=`주문 ${order.number}번 · ${order.province} 허브로 전달했습니다.`;
+  $('confirmation').textContent=`주문 ${order.number}번 · 배송 배정일 ${order.date??'확인 중'} · ${order.province}`;
 }
 function catalog() {
   $('catalog-view').hidden=false;
@@ -27,13 +27,13 @@ function choose(id,choices,placeholder){
   select.disabled=!choices.length;
 }
 function chooseStops(){
-  const stops=options.stops.filter(stop=>stop.province===$('province').value&&stop.dates.includes($('date').value));
+  const stops=options.stops.filter(stop=>stop.province===$('province').value);
   const cities=[...new Set(stops.map(stop=>stop.city))];
   choose('city',cities.map(city=>({label:city,value:city})),'시·군·구 선택');
   if(cities.length===1)$('city').value=cities[0];
   const choices=stops.filter(stop=>stop.city===$('city').value).map(stop=>({label:stop.label,value:stop.id}));
   choose('destination',choices,'배송지 선택');
-  $('hint').textContent=choices.length?'선택한 시설이 기사 지도에 표시됩니다.':'배송일, 시·도, 시·군·구를 선택하세요.';
+  $('hint').textContent=choices.length?'선택한 시설이 기사 지도에 표시됩니다.':'시·도와 시·군·구를 선택하세요.';
   $('submit').disabled=!choices.length;
 }
 function showClock(clock){
@@ -60,9 +60,7 @@ function detail(){
   $('product-price').textContent=money.format(item.price);
   $('province').replaceChildren(...options.provinces.map(name=>new Option(name,name)));
   $('province').value='경상남도';
-  $('date').replaceChildren(...options.dates.map(date=>new Option(date,date)));
-  if(options.dates.includes(options.clock?.date))$('date').value=options.clock.date;
-  for(const id of ['province','city','date'])$(id).addEventListener('change',chooseStops);
+  for(const id of ['province','city'])$(id).addEventListener('change',chooseStops);
   $('quantity').addEventListener('input',total);
   chooseStops();
   total();
@@ -71,7 +69,7 @@ $('checkout').addEventListener('submit',async event=>{
   event.preventDefault();
   $('submit').disabled=true;
   try{
-    const fields=Object.fromEntries(['date','province','destination','recipient','instructions'].map(id=>[id,$(id).value]));
+    const fields=Object.fromEntries(['province','destination','recipient','instructions'].map(id=>[id,$(id).value]));
     const response=await fetch('/api/shop/orders',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({...fields,quantity:$('quantity').valueAsNumber,product})});
     const result=await response.json();

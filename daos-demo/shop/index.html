@@ -1,4 +1,4 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DAOS 데모 스토어</title><link rel="stylesheet" href="style.css?v=21"><script type="module" src="shop.mjs?v=21"></script></head>
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DAOS 데모 스토어</title><link rel="stylesheet" href="style.css?v=22"><script type="module" src="shop.mjs?v=22"></script></head>
 <body><header><a class="shop-brand" href="./">DAOS <b>STORE</b></a><nav><a href="./">전체 상품</a><span id="shared-clock">시연 시간 확인 중</span></nav></header><main>
 <section id="catalog-view" hidden><div class="catalog-hero"><span>DAOS STORE</span><h1>매일 쓰는 물건,<br>문 앞까지.</h1><p>문구부터 생활용품까지, 마음에 드는 상품을 골라 보세요.</p></div>
 <div class="catalog-head"><h2>전체 상품</h2><span>5개 상품</span></div><div id="products" class="catalog-grid"></div></section>
@@ -6,7 +6,7 @@
 <div class="product-layout"><div class="product-photo"><img id="product-image" alt=""></div><section class="card product-info">
 <div id="product-tag" class="section-kicker"></div><h1 id="product-name"></h1><p id="product-description"></p><strong class="product-price" id="product-price"></strong>
 <form id="checkout"><h2>배송 정보</h2>
-<div class="form-row"><label>수량<input id="quantity" type="number" min="1" max="99" value="1" required></label><label>희망 배송일<select id="date" required></select></label></div>
+<label>수량<input id="quantity" type="number" min="1" max="99" value="1" required></label><p class="hint">배송일은 11월 14일부터 주문 접수 순서대로 배정됩니다.</p>
 <label>받는 분<input id="recipient" maxlength="35" placeholder="예시 · 시연 고객" required></label>
 <div class="form-row"><label>시·도<select id="province" required></select></label><label>시·군·구<select id="city" required></select></label></div>
 <label>지도 등록 배송지<select id="destination" required></select></label>

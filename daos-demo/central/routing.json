@@ -1,0 +1,183 @@
+{
+  "provinces": [
+    "서울특별시",
+    "부산광역시",
+    "대구광역시",
+    "인천광역시",
+    "광주광역시",
+    "대전광역시",
+    "울산광역시",
+    "세종특별자치시",
+    "경기도",
+    "강원특별자치도",
+    "충청북도",
+    "충청남도",
+    "전북특별자치도",
+    "전라남도",
+    "경상북도",
+    "경상남도",
+    "제주특별자치도"
+  ],
+  "regions": {
+    "campus": {
+      "city": "창원시",
+      "name": "창원대학교",
+      "segment": 0
+    },
+    "sangnam": {
+      "city": "창원시",
+      "name": "창원 상남동",
+      "segment": 0
+    },
+    "jangyu": {
+      "city": "김해시",
+      "name": "김해 장유1동",
+      "segment": 1
+    },
+    "yulha": {
+      "city": "김해시",
+      "name": "장유 율하",
+      "segment": 1
+    },
+    "yangsan": {
+      "city": "양산시",
+      "name": "양산 이마트",
+      "segment": 2
+    },
+    "buwon": {
+      "city": "김해시",
+      "name": "김해 부원역·시청",
+      "segment": 2
+    },
+    "seoul": {
+      "city": "서울시",
+      "name": "서울시청 주변",
+      "province": "서울특별시",
+      "segment": 0
+    },
+    "busan": {
+      "city": "부산시",
+      "name": "부산시청 주변",
+      "province": "부산광역시",
+      "segment": 0
+    },
+    "daegu": {
+      "city": "대구시",
+      "name": "동대구역 주변",
+      "province": "대구광역시",
+      "segment": 0
+    },
+    "incheon": {
+      "city": "인천시",
+      "name": "인천시청 주변",
+      "province": "인천광역시",
+      "segment": 0
+    },
+    "gwangju": {
+      "city": "광주시",
+      "name": "광주광역시청 주변",
+      "province": "광주광역시",
+      "segment": 0
+    },
+    "daejeon": {
+      "city": "대전시",
+      "name": "대전시청 주변",
+      "province": "대전광역시",
+      "segment": 0
+    },
+    "ulsan": {
+      "city": "울산시",
+      "name": "울산시청 주변",
+      "province": "울산광역시",
+      "segment": 0
+    },
+    "sejong": {
+      "city": "세종시",
+      "name": "세종시청 주변",
+      "province": "세종특별자치시",
+      "segment": 0
+    },
+    "gyeonggi": {
+      "city": "수원시",
+      "name": "수원역 주변",
+      "province": "경기도",
+      "segment": 0
+    },
+    "gangwon": {
+      "city": "춘천시",
+      "name": "춘천역 주변",
+      "province": "강원특별자치도",
+      "segment": 0
+    },
+    "chungbuk": {
+      "city": "청주시",
+      "name": "청주시청 주변",
+      "province": "충청북도",
+      "segment": 0
+    },
+    "chungnam": {
+      "city": "천안시",
+      "name": "천안역 주변",
+      "province": "충청남도",
+      "segment": 0
+    },
+    "jeonbuk": {
+      "city": "전주시",
+      "name": "전주역 주변",
+      "province": "전북특별자치도",
+      "segment": 0
+    },
+    "jeonnam": {
+      "city": "순천시",
+      "name": "순천역 주변",
+      "province": "전라남도",
+      "segment": 0
+    },
+    "gyeongbuk": {
+      "city": "포항시",
+      "name": "포항역 주변",
+      "province": "경상북도",
+      "segment": 0
+    },
+    "jeju": {
+      "city": "제주시",
+      "name": "제주시청 주변",
+      "province": "제주특별자치도",
+      "segment": 0
+    }
+  },
+  "products": {
+    "kit": "학습 문구 세트",
+    "box": "생활용품 상자",
+    "event": "행사 안내 자료",
+    "bottle": "코발트 데일리 텀블러",
+    "tote": "내추럴 코튼 토트백"
+  },
+  "catalog": {
+    "kit": {
+      "price": 12900,
+      "label": "문구",
+      "description": "노트와 필기구를 한 상자에 담은 데일리 문구 세트."
+    },
+    "box": {
+      "price": 24900,
+      "label": "생활",
+      "description": "정리와 일상에 필요한 생활용품을 담은 상자."
+    },
+    "event": {
+      "price": 8900,
+      "label": "인쇄물",
+      "description": "안내와 홍보에 쓰는 행사 자료 묶음."
+    },
+    "bottle": {
+      "price": 19800,
+      "label": "생활",
+      "description": "일상과 외출에 가볍게 챙기는 보온 보냉 텀블러."
+    },
+    "tote": {
+      "price": 15900,
+      "label": "가방",
+      "description": "장보기와 출근길에 두루 쓰는 면 소재 가방."
+    }
+  }
+}

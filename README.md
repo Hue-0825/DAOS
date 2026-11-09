@@ -59,3 +59,16 @@ DAOS/
 **초기 기획 및 저장소 설정 단계.** 아래 서비스와 성능은 개발 목표로, 아직 구현·검증된 결과가 아니다. 실제 장비 적용이나 무중단 운영을 보장하지 않는다.
 
 상세 설계: [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md)
+
+## 배포 주소
+
+| 화면 | 접속 링크 |
+|---|---|
+| 통합 시연 사이트 | [DAOS 통합 사이트](https://daos-logistics.ryker6365.chatgpt.site/) |
+| 스토어 | [DAOS 스토어](https://daos-shop-demo.ryker6365.chatgpt.site/) |
+| 메인 서버 | [메인 관제센터](https://daos-dispatch-demo.ryker6365.chatgpt.site/central/) |
+| 지역 허브 | [지역 허브](https://daos-hub-demo.ryker6365.chatgpt.site/) |
+| 기사 앱 | [기사 앱 웹 화면](https://daos-phone-driver.ryker6365.chatgpt.site/driver/) |
+| 물류센터 | [로봇 관제실](https://daos-dispatch-demo.ryker6365.chatgpt.site/central/warehouse.html) |
+
+처음 참여하는 분은 역할별 공유 링크로 로그인해 접속을 활성화해 주세요. 로봇 관제실은 메인 관제센터 권한을 사용합니다.

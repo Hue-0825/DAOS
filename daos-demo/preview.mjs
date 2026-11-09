@@ -13,6 +13,14 @@ if (sqlite.prepare('PRAGMA user_version').get().user_version < 4) {
   sqlite.exec(await readFile('drizzle/0004_november_demo.sql','utf8'));
   sqlite.exec('PRAGMA user_version = 4');
 }
+if (sqlite.prepare('PRAGMA user_version').get().user_version < 5) {
+  const migration=await readFile('drizzle/0005_global_reset.sql','utf8');
+  sqlite.exec(`BEGIN; ${migration} PRAGMA user_version = 5; COMMIT;`);
+}
+if (sqlite.prepare('PRAGMA user_version').get().user_version < 6) {
+  const migration=await readFile('drizzle/0006_demo_routes.sql','utf8');
+  sqlite.exec(`BEGIN; ${migration} PRAGMA user_version = 6; COMMIT;`);
+}
 function statement(sql, args) {
   return {
     execute() {

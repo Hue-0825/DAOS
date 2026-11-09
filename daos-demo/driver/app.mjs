@@ -218,8 +218,9 @@ function nextSegment(date) {
 function clockTime() {
   return db.demoDate === workDate() ? db.demoTime : null;
 }
+const locationFor=job=>job.place?{...PLACES[job.drop],...job.place,name:job.place.label}:PLACES[job.drop];
 function mapFor(segment) {
-  return MAPS[PLACES[segment?.jobs[0].drop]?.region ?? 'campus'];
+  return MAPS[segment ? locationFor(segment.jobs[0])?.region??'campus' : 'campus'];
 }
 function activeSegment(date = workDate()) {
   const next = nextSegment(date);
@@ -328,6 +329,15 @@ function render() {
     setZoom(1);
   }
   mapImage.alt = `${activeMap.title} · OpenStreetMap 건물과 도로`;
+  const points=new Map();
+  for(const item of handoff ? [] : jobs){
+    const place=locationFor(item);
+    if(stateFor(item)==='delivered'||!Number.isFinite(place?.x)||!Number.isFinite(place?.y))continue;
+    const key=`${place.x}/${place.y}`;
+    if(!points.has(key)||item.key===selected)points.set(key,{...place,selected:item.key===selected});
+  }
+  $('delivery-pins').innerHTML=[...points.values()].map(({x,y,name,selected},index)=>
+    `<span class="delivery-pin${selected?' selected':''}" style="left:${x}%;top:${y}%" title="${escape(name)}">${index+1}${selected?`<b>${escape(name)}</b>`:''}</span>`).join('');
   $('map-title').textContent = activeMap.title;
   $('viewport').setAttribute('aria-label', activeMap.title);
   $('work-date').textContent = `${previewing ? '다음날 시연' : '오늘'} ${dateLabel(displayedDate)} · ${segment ? `${segment.slot} · ${segment.index + 1}구간 ${activeMap.name} · ${offline ? '기기에 저장된 6시간 구간' : '6시간 배송 구간'}` : waiting ? `${waiting.slot.slice(0, 5)}부터 다음 구간 시작` : '현재 열려 있는 구간 없음'}`;
@@ -336,7 +346,7 @@ function render() {
     const state = stateFor(item);
     return `<button class="job" type="button" data-key="${escape(item.key)}" aria-pressed="${item.key === selected}">
       <span class="job-top"><small>${escape(deliveryNumber(item))}</small><span class="pill ${state}">${STATES[state]}</span></span>
-      <strong>${escape(item.title)}</strong><span class="pair">배송지 · ${PLACES[item.drop].name}</span>
+      <strong>${escape(item.title)}</strong><span class="pair">배송지 · ${escape(locationFor(item).name)}</span>
       <span class="job-end">${escape(item.cargo)}</span>
     </button>`;
   }).join('') : `<p class="empty">${waiting ? `시연 시각을 ${waiting.slot.slice(0, 5)} 이후로 설정하면 다음 배송 구간을 열 수 있습니다.` : finished ? '이 날짜의 배송을 모두 마쳤습니다.' : '이 날짜에 받은 작업이 없습니다.'}</p>`;
@@ -350,14 +360,14 @@ function renderDeliveryDetail(job) {
     detail.replaceChildren();
     return;
   }
-  const drop = PLACES[job.drop];
+  const drop = locationFor(job);
   const state = stateFor(job);
   const label = state === 'delivered' ? '배송 완료됨' : '배송 완료 기록';
   const hasPending = !db.baseline && db.pending.some(event => event.key === job.key);
   const note = state === 'ready' ? '하루치 일괄 집하를 기록하면 배송을 시작할 수 있습니다.'
     : hasPending ? '기기에 저장됨 · 서버 복구 시 동기화' : '인계 장소와 현장 안내를 확인하세요.';
   detail.innerHTML = `<div class="detail-title"><h3>${escape(job.title)}</h3><span>${escape(deliveryNumber(job))} · ${SEGMENTS[segmentFor(job)]}</span></div>
-    <div class="stop"><small>배송지</small><b>${drop.name}${drop.building ? ` · ${drop.building}` : ''}</b><p>${escape(job.to)}</p></div>
+    <div class="stop"><small>배송지</small><b>${escape(drop.name)}${drop.building ? ` · ${escape(drop.building)}` : ''}</b><p>${escape(job.to)}</p></div>
     <div class="actions"><button id="record" class="primary" type="button" ${state !== 'picked' || readError ? 'disabled' : ''}>${label}</button><p>${note}</p></div>`;
   $('record').addEventListener('click', () => recordDelivery(job));
 }
@@ -371,7 +381,7 @@ function renderMobileAction(job, blocked) {
   document.documentElement.classList.toggle('has-mobile-action', Boolean(action));
   if (!action) return;
   const delivery = action.id === 'record';
-  $('mobile-action-title').textContent = delivery ? PLACES[job.drop].name : action.id === 'pickup-all' ? pickupPoint() : $('map-title').textContent;
+  $('mobile-action-title').textContent = delivery ? locationFor(job).name : action.id === 'pickup-all' ? pickupPoint() : $('map-title').textContent;
   $('mobile-action-note').textContent = delivery ? deliveryNumber(job) : $('work-date').textContent;
   $('mobile-action').textContent = action.textContent;
   $('mobile-action').dataset.target = action.id;
@@ -457,7 +467,17 @@ async function refresh() {
   const wasConnected = connected;
   let changed = false;
   try {
-    const { jobs, revision, events:remote, resets={} } = await driverRequest(`?mode=${mode}`);
+    const { jobs, revision, events:remote, resets={}, resetRevision=0 } = await driverRequest(`?mode=${mode}`);
+    if(resetRevision && resetRevision!==db.resetRevision){
+      if(!save({...blank(),resets,resetRevision}))return;
+      selected=null;
+      serverJobs=[];
+      serverEvents=[];
+      updateClockControls();
+      toast('전체 시연이 초기화됐습니다.');
+      changed=true;
+      if(mode==='baseline')return;
+    }
     const cleared = Object.keys(resets).filter(date=>resets[date] !== db.resets?.[date]);
     const keep = event=>!cleared.includes(event.date);
     if(cleared.length){

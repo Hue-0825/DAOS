@@ -84,3 +84,8 @@ footer a+a{margin-left:7px}
 
 .workspace.workspace-no-map{grid-template-columns:minmax(0,1fr)}
 .pending-count{padding:5px 9px;border-radius:6px;background:#ffe0b5;color:#793908;font-size:13px;box-shadow:inset 0 0 0 1px #e8ab61}
+
+#delivery-pins{position:absolute;inset:0;pointer-events:none}
+.delivery-pin{position:absolute;translate:-50% -50%;display:grid;place-items:center;width:19px;height:19px;border:2px solid #fff;border-radius:50%;background:#5442c5;color:white;font-size:9px;font-weight:800;box-shadow:0 1px 4px #141c28}
+.delivery-pin.selected{background:#b25918;z-index:1}
+.delivery-pin b{position:absolute;bottom:calc(100% + 3px);left:50%;translate:-50%;white-space:nowrap;background:#1c2940;color:#fff;border-radius:4px;padding:3px 5px;font-size:9px}

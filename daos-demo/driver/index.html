@@ -8,8 +8,8 @@
 <title>DAOS Driver · 창원대 캠퍼스</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="manifest" href="app.webmanifest">
-<link rel="stylesheet" href="style.css?v=17">
-<script type="module" src="app.mjs?v=17"></script>
+<link rel="stylesheet" href="style.css?v=19">
+<script type="module" src="app.mjs?v=19"></script>
 </head>
 <body>
 <header class="top">
@@ -60,7 +60,7 @@
       <div class="map-head"><div><h2 id="map-title">캠퍼스 지도</h2><p>배송 권역 안내</p></div></div>
       <div id="next-delivery" class="next-delivery" role="status" hidden><strong id="next-delivery-title"></strong><p id="next-delivery-time"></p></div>
       <div class="viewport" id="viewport" aria-label="창원대학교 캠퍼스 지도">
-        <div id="scene"><img id="map-image" alt="OpenStreetMap 좌표를 바탕으로 그린 국립창원대학교 건물과 도로 지도" width="1080" height="504" draggable="false"></div>
+        <div id="scene"><img id="map-image" alt="배송 권역 지도" width="1080" height="504" draggable="false"><div id="delivery-pins" aria-hidden="true"></div></div>
         <div class="zoom"><button id="zoom-in" type="button" aria-label="확대">+</button><button id="zoom-out" type="button" aria-label="축소">−</button><button id="zoom-reset" type="button" aria-label="지도 전체 보기" title="지도 전체 보기">⌂</button></div>
       </div>
       <div id="detail" class="detail"></div>

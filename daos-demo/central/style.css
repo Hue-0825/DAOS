@@ -40,3 +40,8 @@ td strong{overflow-wrap:anywhere}
 #region-preview{margin:15px 0 0}
 #region-preview img{width:100%;display:block;border-radius:8px}
 #region-preview figcaption{font-size:12px;margin-top:5px;color:#5b546e}
+
+.reset-panel{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+#reset-demo{background:#fff3ee;color:#8b3921;border-color:#e8b2a3}
+#reset-result{flex-basis:100%;font-weight:700}
+#reset-result:empty{display:none}

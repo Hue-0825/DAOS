@@ -2,23 +2,34 @@ const $=id=>document.getElementById(id);
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const slots=['06:00–12:00','12:00–18:00','18:00–24:00'];
 let province='경상남도';
-let selectedRegion;
+let selectedGroup;
 let data;
 let busy=false;
 function render(){
   if(!data)return;
   const date=$('dispatch-date').value;
   const orders=data.orders.filter(order=>order.work_date===date);
-  const routes=[...new Set(orders.map(order=>order.region).filter(Boolean))];
-  if(!routes.includes(selectedRegion))selectedRegion=routes[0];
-  const route=data.regions[selectedRegion];
+  const groups=new Map();
+  for(const order of orders){
+    if(!order.region)continue;
+    const key=`${order.region}/${order.segment}`;
+    if(!groups.has(key))groups.set(key,{region:order.region,segment:order.segment,rows:[]});
+    groups.get(key).rows.push(order);
+  }
+  if(!groups.has(selectedGroup))selectedGroup=groups.keys().next().value;
+  const selected=groups.get(selectedGroup);
+  const route=data.regions[selected?.region];
   $('region-preview').hidden=!route;
   if(route){
-    const map=`${route.province?'region-':''}${selectedRegion}.svg`;
+    const map=`${route.province?'region-':''}${selected.region}.svg`;
     if($('hub-map').getAttribute('src')!==map)$('hub-map').src=map;
-    const caption=`${province} · ${route.city} · ${route.name}`;
+    const caption=`${province} · ${route.city} · ${route.name} · ${slots[selected.segment]}`;
     $('hub-map').alt=caption;
     $('hub-map-caption').textContent=caption;
+    const points=[...new Set(selected.rows.map(order=>order.destination))]
+      .map(id=>data.locations?.[id]).filter(place=>Number.isFinite(place?.x)&&Number.isFinite(place?.y));
+    $('hub-pins').innerHTML=points.map(({x,y,label},i)=>`<span class="hub-pin" style="left:${x}%;top:${y}%" title="${esc(label)}">${i+1}</span>`).join('');
+    $('map-stops').innerHTML=points.map(({label})=>`<li>${esc(label)}</li>`).join('');
   }
   $('server-state').dataset.offline=String(!data.online);
   $('server-state').textContent=data.online?'서버 연결됨':'기사 서버 연결 차단 중';
@@ -28,16 +39,16 @@ function render(){
   $('connection').disabled=busy;
   $('connection').textContent=data.online?'메인 서버 연결 끊기':'메인 서버 복구';
   function groupList(dispatched){
-    return routes.map(region=>{
-      const rows=orders.filter(order=>order.region===region&&Boolean(order.dispatch_revision)===dispatched);
+    return [...groups.entries()].map(([key,{region,segment,rows:groupRows}])=>{
+      const rows=groupRows.filter(order=>Boolean(order.dispatch_revision)===dispatched);
       if(!rows.length)return '';
-      const {name,city,segment}=data.regions[region];
+      const {name,city}=data.regions[region];
       const addresses=[...new Set(rows.map(order=>order.address))];
       return `<div class="group"><div><strong>${esc(name)} · ${rows.length}건</strong>
         <small>${esc(province)} ${esc(city)} · ${slots[segment]}</small>
         <small class="addresses">${addresses.map(esc).join(' · ')}</small></div>
-        <div class="group-actions"><button type="button" class="secondary" data-map-region="${region}" aria-pressed="${region===selectedRegion}">지도 보기</button>
-        ${dispatched?'':`<button type="button" data-region="${region}" ${busy?'disabled':''}>배차 확정</button>`}</div></div>`;
+        <div class="group-actions"><button type="button" class="secondary" data-map-group="${key}" aria-pressed="${key===selectedGroup}">지도 보기</button>
+        ${dispatched?'':`<button type="button" data-region="${region}" data-segment="${segment}" ${busy?'disabled':''}>배차 확정</button>`}</div></div>`;
     }).join('');
   }
   $('groups').innerHTML=groupList(false)||'<p>배차할 권역 주문이 없습니다.</p>';
@@ -79,9 +90,9 @@ async function post(path,body,message){
 $('province').onchange=()=>{province=$('province').value;data=null;$('groups').replaceChildren();$('dispatches').replaceChildren();$('orders').replaceChildren();$('region-preview').hidden=true;$('reset').disabled=true;$('connection').disabled=true;void refresh()};
 $('dispatch-date').onchange=render;
 function selectMap(event){
-  const button=event.target.closest('[data-map-region]');
+  const button=event.target.closest('[data-map-group]');
   if(!button)return false;
-  selectedRegion=button.dataset.mapRegion;
+  selectedGroup=button.dataset.mapGroup;
   render();
   $('region-preview').scrollIntoView({block:'nearest'});
   return true;
@@ -89,7 +100,7 @@ function selectMap(event){
 $('groups').onclick=event=>{
   if(selectMap(event))return;
   const button=event.target.closest('[data-region]');
-  if(button)void post('/api/hub/dispatch',{province,date:$('dispatch-date').value,region:button.dataset.region},
+  if(button)void post('/api/hub/dispatch',{province,date:$('dispatch-date').value,region:button.dataset.region,segment:Number(button.dataset.segment)},
     result=>`${result.count}건을 ${province} 시연 기사 작업표에 배정했습니다.`);
 };
 $('dispatches').onclick=selectMap;

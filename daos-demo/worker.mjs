@@ -5,7 +5,7 @@ const fixtures = JSON.parse(ASSETS['/driver/jobs.json']);
 const places = JSON.parse(ASSETS['/ops/places.json']);
 const routing = JSON.parse(ASSETS['/central/routing.json']);
 const types = { html:'text/html', mjs:'text/javascript', js:'text/javascript', css:'text/css', svg:'image/svg+xml', webmanifest:'application/manifest+json', json:'application/json' };
-const controlSql = 'SELECT online, revision FROM control WHERE id = 1';
+const controlSql = 'SELECT online, revision, reset_revision FROM control WHERE id = 1';
 const publishedSql = 'SELECT id, rowid AS number, work_date AS date, segment, title, cargo, destination AS "drop", instructions AS "to" FROM orders WHERE province = ? AND revision IS NOT NULL AND work_date BETWEEN ? AND ? ORDER BY segment, rowid';
 const guard = '(SELECT online FROM control WHERE id = 1) = 1';
 const run = (db, sql, ...args) => args.length ? db.prepare(sql).bind(...args) : db.prepare(sql);
@@ -40,7 +40,8 @@ async function sampleId(date, key) {
   return [hex.slice(0,8),hex.slice(8,12),hex.slice(12,16),hex.slice(16,20),hex.slice(20)].join('-');
 }
 function jobView(job) {
-  return { ...job, key: `${job.date}/${job.id}` };
+  const location=places[job.drop];
+  return { ...job, drop:location.anchor??job.drop, place:location, key: `${job.date}/${job.id}` };
 }
 function validEvent(event) {
   if (!event || typeof event.id !== 'string' || !/^[0-9a-f-]{36}$/i.test(event.id) ||
@@ -63,7 +64,8 @@ const compact = value => value.replace(/\s+/g,'');
 function routeAddress(province, city, address) {
   if (province !== DEFAULT_PROVINCE) {
     const region=Object.keys(routing.regions).find(key=>routing.regions[key].province===province);
-    return region ? [`prov_${region}`,region,routing.regions[region].segment] : [];
+    const stop=Object.entries(places).find(([,place])=>place.region===region&&place.anchor&&compact(address).includes(compact(place.label)));
+    return region ? [stop?.[0]??`prov_${region}`,region,routing.regions[region].segment] : [];
   }
   const normalized = compact(address);
   const matches = Object.entries(places).filter(([,place]) =>
@@ -71,6 +73,35 @@ function routeAddress(province, city, address) {
   if (matches.length !== 1) return [];
   const [destination, place] = matches[0];
   return [destination, place.region, routing.regions[place.region].segment];
+}
+
+async function demoOrders() {
+  const national=routing.provinces.filter(name=>name!==DEFAULT_PROVINCE);
+  const gyeongnam=[['campus','jangyu','yangsan'],['sangnam','yulha','buwon'],['campus','yulha','yangsan']];
+  return Promise.all(dates().flatMap((date,day)=>Array.from({length:100},async (_,index)=>{
+    const segment=index%3;
+    const province=index<20?DEFAULT_PROVINCE:national[(index-20)%national.length];
+    const region=province===DEFAULT_PROVINCE?gyeongnam[day][segment]
+      :Object.keys(routing.regions).find(key=>routing.regions[key].province===province);
+    const detail=routing.regions[region];
+    const stops=Object.keys(places).filter(key=>places[key].region===region&&(province===DEFAULT_PROVINCE||places[key].anchor));
+    const visit=province===DEFAULT_PROVINCE?Math.floor(index/3):Math.floor((index-20)/national.length);
+    const destination=stops[(visit+day)%stops.length];
+    const id=await sampleId(date,`history-v1/${index}`);
+    const created=new Date(Date.parse(`${date}T00:00:00+09:00`)+(index+1)*60000).toISOString();
+    return [id,created,date,province,detail.city,places[destination].label,`시연 고객 ${String(day*100+index+1).padStart(3,'0')}`,
+      Object.values(routing.products)[index%5],index%4+1,'시연용 · 건물 입구에서 담당자 인계',destination,region,segment];
+  })));
+}
+function insertDemoOrders(db,plan,restore=false) {
+  const statements=[];
+  for(let i=0;i<plan.length;i+=7){
+    const rows=plan.slice(i,i+7);
+    const conflict=restore?`DO UPDATE SET city=excluded.city,address=excluded.address,instructions=excluded.instructions,
+      destination=excluded.destination,region=excluded.region,segment=excluded.segment`:'DO NOTHING';
+    statements.push(run(db,`INSERT INTO intake VALUES ${rows.map(()=>'(?,?,?,?,?,?,?,?,?,?,?,?,?)').join(',')} ON CONFLICT(id) ${conflict}`,...rows.flat()));
+  }
+  return statements;
 }
 
 async function intakeApi(request, db, path) {
@@ -103,6 +134,27 @@ async function intakeApi(request, db, path) {
     return json({ orders:result.results, provinces:routing.provinces, regions:routing.regions,
       online:Boolean(control.results[0].online), historyDates:dates() });
   }
+  if (path === '/api/central/reset' && request.method === 'POST') {
+    const plan=await demoOrders();
+    const activeWindow=windowDates();
+    // These UUIDs are generated from fixed demo dates and indexes, never from request input.
+    const ids=plan.map(([id])=>`'${id}'`).join(',');
+    const extra=`work_date BETWEEN ? AND ? AND id NOT IN (${ids})`;
+    const [,,removed]=await db.batch([
+      run(db,'UPDATE control SET online=1, revision=revision+1, reset_revision=revision+1 WHERE id=1'),
+      run(db,`INSERT OR IGNORE INTO demo_reset_archive SELECT * FROM intake WHERE ${extra}`,...activeWindow),
+      run(db,`DELETE FROM intake WHERE ${extra}`,...activeWindow),
+      run(db,'DELETE FROM events'),
+      run(db,'DELETE FROM orders'),
+      run(db,'DELETE FROM province_receipt'),
+      run(db,'DELETE FROM receipt'),
+      ...dates().map(date=>run(db,`INSERT INTO dispatch_reset (province,work_date,revision)
+        SELECT value,?,reset_revision FROM json_each(?),control WHERE control.id=1
+        ON CONFLICT(province,work_date) DO UPDATE SET revision=excluded.revision`,date,JSON.stringify(routing.provinces))),
+      ...insertDemoOrders(db,plan,true),
+    ]);
+    return json({count:plan.length,archived:removed.meta.changes});
+  }
   if (path === '/api/central/seed' && request.method === 'POST') {
     const groups=dates();
     const { removeDates=[] }=await request.json();
@@ -116,23 +168,8 @@ async function intakeApi(request, db, path) {
       cleanup.push(run(db,`DELETE FROM intake WHERE id IN (${ids.map(()=>'?').join(',')})
         AND NOT EXISTS (SELECT 1 FROM orders WHERE orders.id=intake.id)`,...ids));
     }
-    const plan=await Promise.all(groups.flatMap((date,day)=>Array.from({length:100},async (_,index)=>{
-      const province=index<20?DEFAULT_PROVINCE:routing.provinces.filter(name=>name!==DEFAULT_PROVINCE)[(index-20)%16];
-      const region=province===DEFAULT_PROVINCE?['campus','jangyu','yangsan'][index%3]
-        :Object.keys(routing.regions).find(key=>routing.regions[key].province===province);
-      const detail=routing.regions[region];
-      const stops=Object.keys(places).filter(key=>places[key].region===region);
-      const destination=stops[index%stops.length];
-      const id=await sampleId(date,`history-v1/${index}`);
-      const created=new Date(Date.parse(`${date}T00:00:00+09:00`)+(index+1)*60000).toISOString();
-      return [id,created,date,province,detail.city,places[destination].label,`시연 고객 ${String(day*100+index+1).padStart(3,'0')}`,
-        Object.values(routing.products)[index%5],index%4+1,'시연용 · 지정 인계 지점',destination,region,detail.segment];
-    })));
-    const statements=[];
-    for(let i=0;i<plan.length;i+=7){
-      const rows=plan.slice(i,i+7);
-      statements.push(run(db,`INSERT OR IGNORE INTO intake VALUES ${rows.map(()=>'(?,?,?,?,?,?,?,?,?,?,?,?,?)').join(',')}`,...rows.flat()));
-    }
+    const plan=await demoOrders();
+    const statements=insertDemoOrders(db,plan);
     const results=await db.batch([...cleanup,...statements]);
     const sum=items=>items.reduce((total,result)=>total+result.meta.changes,0);
     return json({ dates:groups, planned:plan.length, removed:sum(results.slice(0,cleanup.length)), inserted:sum(results.slice(cleanup.length)) });
@@ -145,26 +182,29 @@ async function intakeApi(request, db, path) {
       run(db,controlSql),revisionFor(db,province),
       run(db,'SELECT revision, saved_at FROM province_receipt WHERE province = ?',province),
     ]);
-    return json({ orders:intake.results, provinces:routing.provinces, regions:routing.regions,
-      receipt:receipt.results[0], online:control.results[0].online,revision:revision.results[0].revision,dates:dates() });
+    const destinations=new Set(intake.results.map(order=>order.destination).filter(Boolean));
+    const locations=Object.fromEntries([...destinations].map(id=>[id,places[id]]));
+    return json({ orders:intake.results, provinces:routing.provinces, regions:routing.regions, locations,
+      receipt:receipt.results[0], online:control.results[0].online,
+      revision:intake.results.some(order=>order.dispatch_revision)?revision.results[0].revision:0,dates:dates() });
   }
   if (path === '/api/hub/dispatch' && request.method === 'POST') {
-    const { province, date, region } = await request.json();
+    const { province, date, region, segment:routedSegment } = await request.json();
     const route=routing.regions[region];
     if (!routing.provinces.includes(province) || !dates().includes(date) || !Object.hasOwn(routing.regions,region)
-        || (route.province??DEFAULT_PROVINCE)!==province) {
+        || (route.province??DEFAULT_PROVINCE)!==province || (routedSegment!==undefined&&![0,1,2].includes(routedSegment))) {
       return json({error:'해당 허브의 오늘부터 모레까지의 배송 권역만 배차할 수 있습니다.'},400);
     }
-    const { segment } = route;
+    const segment=routedSegment??route.segment;
     const sameRegion = Object.keys(places).filter(key=>places[key].region === region);
     const [insert] = await db.batch([
       run(db,`INSERT OR IGNORE INTO orders (id,work_date,segment,title,cargo,destination,instructions,revision,province)
         SELECT intake.id,intake.work_date,intake.segment,intake.product,intake.quantity || '개',intake.destination,
           intake.address || CASE WHEN intake.instructions <> '' THEN ' · ' || intake.instructions ELSE '' END,
           (SELECT revision + 1 FROM control WHERE id = 1),intake.province
-        FROM intake WHERE province = ? AND work_date = ? AND region = ? AND destination IS NOT NULL
+        FROM intake WHERE province = ? AND work_date = ? AND region = ? AND segment = ? AND destination IS NOT NULL
         AND NOT EXISTS (SELECT 1 FROM orders WHERE province = ? AND work_date = ? AND segment = ? AND destination NOT IN (${sameRegion.map(()=>'?').join(',')}))`,
-        province,date,region,province,date,segment,...sameRegion),
+        province,date,region,segment,province,date,segment,...sameRegion),
       run(db,`UPDATE control SET revision = revision + 1 WHERE id = 1
         AND EXISTS (SELECT 1 FROM orders WHERE orders.revision = control.revision + 1)`),
     ]);
@@ -245,7 +285,7 @@ async function api(request, db, path) {
         run(db,'SELECT work_date AS date,revision FROM dispatch_reset WHERE province = ?',province),
       ]);
       if(!control.results[0].online)return json({error:'메인 서버 연결 끊김'},503);
-      return json({revision:revision.results[0].revision,jobs:jobs.results.map(jobView),events:events.results,resets:Object.fromEntries(resets.results.map(reset=>[reset.date,reset.revision]))});
+      return json({revision:revision.results[0].revision,resetRevision:control.results[0].reset_revision,jobs:jobs.results.map(jobView),events:events.results,resets:Object.fromEntries(resets.results.map(reset=>[reset.date,reset.revision]))});
     }
     if (path === '/api/driver/receipt' && method === 'POST') {
       const { revision } = await request.json();
@@ -287,8 +327,10 @@ export default {
         const shop = token === env.DAOS_SHOP_TOKEN && pathname.startsWith('/api/shop/');
         const hub = token === env.DAOS_HUB_TOKEN && (pathname.startsWith('/api/hub/') || pathname === '/api/ops/connection');
         const driver = token === env.DAOS_DRIVER_TOKEN && (pathname === '/api/driver' || pathname.startsWith('/api/driver/'));
-        const consoleView = pathname === '/api/central/orders' && request.method === 'GET'
-          && Boolean(request.headers.get('oai-authenticated-user-id'));
+        const consoleView = Boolean(request.headers.get('oai-authenticated-user-id')) && (
+          (pathname === '/api/central/orders' && request.method === 'GET') ||
+          (pathname === '/api/central/reset' && request.method === 'POST' && request.headers.get('Origin') === new URL(request.url).origin)
+        );
         const seed = pathname === '/api/central/seed' && request.method === 'POST'
           && Boolean(env.DAOS_SEED_TOKEN) && token === env.DAOS_SEED_TOKEN;
         if (!shop && !hub && !driver && !consoleView && !seed) return json({error:'서버 간 연결이 필요합니다.'},401);

@@ -52,8 +52,10 @@ const sessionToken=(request,name)=>request.headers.get('Cookie')?.split(';').map
 function accessPage(message,actions) {
   return new Response(`<!doctype html><html lang="ko"><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1"><title>DAOS 통합 시연 로그인</title>
-    <link rel="stylesheet" href="/style.css"><main class="shell section"><p class="eyebrow">DAOS / 통합 로그인</p>
-    <h1>운영 웹 접속</h1><p>${message}</p><div class="actions">${actions}</div><p class="access"><a href="/">통합 사이트로 돌아가기</a></p></main></html>`,
+    <link rel="stylesheet" href="/style.css?v=3"><body>
+    <header class="topbar"><div class="shell bar"><a class="brand" href="/">DAOS <span>스마트 물류</span></a><span class="header-label">통합 로그인</span></div></header>
+    <main class="shell login"><section class="card login-card" aria-labelledby="access-title"><p class="eyebrow">DAOS 통합 로그인</p>
+    <h1 id="access-title">운영 웹 접속</h1><p class="lead">${message}</p><div class="actions">${actions}</div><p class="access"><a href="/">← 통합 사이트로 돌아가기</a></p></section></main></body></html>`,
     {headers:{...privateHeaders,'Content-Type':'text/html; charset=utf-8',
       'Content-Security-Policy':"default-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"}});
 }

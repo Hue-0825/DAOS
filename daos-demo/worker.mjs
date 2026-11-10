@@ -150,7 +150,12 @@ async function intakeApi(request, db, path) {
       address=item.address.trim();
       [destination=null,region=null,segment=null]=routeAddress(item.province,city,address);
     }
-    const id = crypto.randomUUID();
+    const retryId=item.requestId;
+    if(retryId!==undefined && (typeof retryId!=='string'||!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(retryId))){
+      return json({error:'주문 접수 키를 확인해 주세요.'},400);
+    }
+    const id=retryId??crypto.randomUUID();
+    const recipient=item.recipient.trim(),product=routing.products[item.product],instructions=item.instructions.trim();
     // Pick and insert in one SQL statement so simultaneous checkouts cannot overfill a day.
     const result = await run(db,`WITH RECURSIVE limits(start,capacity) AS (VALUES (?,?)), queue(work_date) AS (
       SELECT MAX(limits.start,date(demo_date,'+1 day'),
@@ -163,9 +168,14 @@ async function intakeApi(request, db, path) {
     )
     INSERT INTO intake
     SELECT ?, ?, queue.work_date, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM queue ORDER BY queue.work_date DESC LIMIT 1
-    RETURNING rowid AS number,work_date AS date`,QUEUE_START,DAILY_CAPACITY,id,new Date().toISOString(),item.province,city,address,item.recipient.trim(),
-      routing.products[item.product],item.quantity,item.instructions.trim(),destination,region,segment).all();
-    return json({...result.results[0],province:item.province},201);
+    ON CONFLICT(id) DO NOTHING
+    RETURNING rowid AS number,work_date AS date`,QUEUE_START,DAILY_CAPACITY,id,new Date().toISOString(),item.province,city,address,recipient,
+      product,item.quantity,instructions,destination,region,segment).all();
+    if(result.results[0])return json({...result.results[0],province:item.province},201);
+    const [saved]=(await run(db,`SELECT rowid AS number,work_date AS date,province FROM intake
+      WHERE id=? AND province=? AND city=? AND address=? AND recipient=? AND product=? AND quantity=? AND instructions=? AND destination IS ?`,
+      id,item.province,city,address,recipient,product,item.quantity,instructions,destination).all()).results;
+    return saved?json({...saved,replayed:true}):json({error:'이미 다른 주문에 사용된 접수 키입니다.'},409);
   }
   if (path === '/api/central/connection' && request.method === 'POST') {
     const {online}=await request.json();
@@ -398,15 +408,34 @@ async function api(request, db, path) {
       const sessionMode=modeFor(mode,province);
       const epoch=event=>Number.isInteger(event.epoch)&&event.epoch>=0?event.epoch:0;
       const fresh='? = COALESCE((SELECT revision FROM dispatch_reset WHERE province = ? AND work_date = ?),0)';
+      const stateRank={picked:0,started:1,delivered:2};
+      const ordered=[...events].sort((a,b)=>stateRank[a.state]-stateRank[b.state]);
       const results=await db.batch([
-        ...events.map(event=>run(db,`INSERT OR IGNORE INTO events SELECT ?, ?, ?, ?, ?, ? WHERE ${guard}
-          AND ${fresh} AND EXISTS (SELECT 1 FROM orders WHERE province = ? AND work_date = ? AND revision IS NOT NULL AND (? <> 'delivered' OR id = ?))`,
-          event.id,sessionMode,event.key,event.date,event.state,event.at,epoch(event),province,event.date,province,event.date,event.state,event.key.slice(11))),
+        ...ordered.map(event=>run(db,`INSERT OR IGNORE INTO events (id,mode,job_key,work_date,state,recorded_at)
+          SELECT ?, ?, ?, ?, ?, ? WHERE ${guard} AND ${fresh}
+          AND EXISTS (
+            SELECT 1 FROM orders AS work WHERE work.province=? AND work.work_date=? AND work.revision IS NOT NULL
+            AND (? <> 'delivered' OR work.id=?)
+            AND (? <> 'started' OR work.segment=?)
+            AND (? = 'picked' OR EXISTS (
+              SELECT 1 FROM events AS pickup WHERE pickup.mode=? AND pickup.job_key=work.work_date || '/pickup' AND pickup.state='picked'
+            ))
+            AND (? <> 'delivered' OR work.segment=0 OR EXISTS (
+              SELECT 1 FROM events AS start WHERE start.mode=? AND start.job_key=work.work_date || '/start/' || work.segment AND start.state='started'
+            ))
+          )`,event.id,sessionMode,event.key,event.date,event.state,event.at,epoch(event),province,event.date,
+          province,event.date,event.state,event.key.slice(11),event.state,Number(event.key.slice(-1))||0,event.state,sessionMode,event.state,sessionMode)),
         run(db,controlSql),
-        ...events.map(event=>run(db,`SELECT 1 FROM events WHERE mode = ? AND job_key = ? AND state = ? AND ${fresh}`,sessionMode,event.key,event.state,epoch(event),province,event.date)),
+        ...events.map(event=>run(db,`SELECT 1 FROM events AS saved
+          WHERE saved.mode=? AND saved.job_key=? AND saved.state=? AND ${fresh}
+          AND NOT EXISTS (SELECT 1 FROM events AS reused WHERE reused.id=? AND
+            (reused.mode<>saved.mode OR reused.job_key<>saved.job_key OR reused.state<>saved.state))`,
+          sessionMode,event.key,event.state,epoch(event),province,event.date,event.id)),
       ]);
       if(!results[events.length].results[0].online)return json({error:'메인 서버 연결 끊김'},503);
-      return json({acknowledged:events.filter((_,index)=>results[events.length+1+index].results.length).map(event=>event.id)});
+      const acknowledged=[],unverified=[];
+      events.forEach((event,index)=>(results[events.length+1+index].results.length?acknowledged:unverified).push(event.id));
+      return json({acknowledged,unverified});
     }
   }
   return json({ error:'요청을 찾을 수 없습니다.' },404);

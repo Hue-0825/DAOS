@@ -1,4 +1,4 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DAOS 데모 스토어</title><link rel="stylesheet" href="style.css?v=22"><script type="module" src="shop.mjs?v=22"></script></head>
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DAOS 데모 스토어</title><link rel="stylesheet" href="style.css?v=22"><script type="module" src="shop.mjs?v=23"></script></head>
 <body><header><a class="shop-brand" href="./">DAOS <b>STORE</b></a><nav><a href="./">전체 상품</a><span id="shared-clock">시연 시간 확인 중</span></nav></header><main>
 <section id="catalog-view" hidden><div class="catalog-hero"><span>DAOS STORE</span><h1>매일 쓰는 물건,<br>문 앞까지.</h1><p>문구부터 생활용품까지, 마음에 드는 상품을 골라 보세요.</p></div>
 <div class="catalog-head"><h2>전체 상품</h2><span>5개 상품</span></div><div id="products" class="catalog-grid"></div></section>
@@ -13,7 +13,7 @@
 <p class="hint" id="hint">지도에 등록된 배송지를 선택하세요.</p>
 <label>인계 요청 사항<input id="instructions" maxlength="100" placeholder="예시 · 1층 입구 앞"></label>
 <div class="order-total"><span>주문 금액</span><strong id="total"></strong></div>
-<button id="submit" disabled>주문하기</button><p id="result" role="status"></p>
+<button id="submit" disabled>주문하기</button><p class="hint">응답이 끊기면 입력값을 유지하고 다시 눌러 주세요. 같은 접수 요청은 한 건으로 처리합니다.</p><p id="result" role="status"></p>
 </form></section></div></section>
 <section id="complete-view" class="card complete-order" hidden><div class="order-check" aria-hidden="true">✓</div><h1>주문이 완료되었습니다</h1><p id="confirmation"></p><a class="shop-button" href="./">쇼핑몰로 돌아가기</a></section>
 <p id="shop-error" role="status"></p>

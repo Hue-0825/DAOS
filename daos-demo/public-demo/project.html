@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DAOS 프로젝트 소개 및 기술 검증</title>
+<meta name="description" content="DAOS의 주문·배차·배송·로봇 시연, 단절 운영과 복구 검증 원리, 논문과 표준 검토 결과를 설명합니다.">
+<link rel="stylesheet" href="/style.css?v=5">
+</head>
+<body>
+<header class="topbar"><div class="shell bar"><a class="brand" href="/">DAOS <span>스마트 물류</span></a><nav aria-label="프로젝트 메뉴"><a href="#flow">작동 방식</a><a href="#evidence">기술 검증</a><a href="#test">실험과 비용</a><a href="/#systems">시연 열기 ↗</a></nav></div></header>
+<main class="shell project">
+<section class="hero" aria-labelledby="project-title">
+  <div><p class="eyebrow">프로젝트 소개 · 기술 검증</p><h1 id="project-title">DAOS 분산 자율운영 시스템</h1>
+  <p class="lead">중앙 서버와 현장의 연결이 끊겼을 때, 기기에 미리 받은 작업으로 업무를 이어가고 연결이 돌아오면 기록을 대조하는 물류 시연입니다. 배송 기사 앱과 물류센터 로봇은 서로 다른 장애 상황을 보여줍니다.</p></div>
+  <aside class="overview" aria-label="시연 구성"><div><span>배송 운영</span><strong>주문 → 배송</strong><p>스토어, 메인, 허브, 기사 앱</p></div><div><span>현장 운영</span><strong>로봇 20대</strong><p>상자 54개를 처리하는 독립 시뮬레이션</p></div></aside>
+</section>
+<section class="section" id="flow"><p class="eyebrow">01 / 전체 구조</p><h2>주문이 들어와 현장 작업이 되기까지</h2>
+  <ol class="scenario">
+    <li><strong>스토어</strong><p>상품과 배송지를 받아 주문 원장에 접수합니다. 같은 요청을 다시 보내면 기존 접수 번호를 돌려줍니다.</p></li>
+    <li><strong>메인 관제센터</strong><p>주문을 모아 지역 허브에 전송합니다. 배송 시연 시간과 기사 연결 상태를 관리합니다.</p></li>
+    <li><strong>지역 허브</strong><p>시·도와 시간대별 작업표를 배차합니다. 배차 버전과 기사 기기의 저장 확인을 비교합니다.</p></li>
+    <li><strong>기사 앱</strong><p>당일과 다음날의 확정 작업표를 받아 둡니다. 배송 결과는 기기에 저장하고 서버가 확인한 기록만 대기열에서 뺍니다.</p></li>
+  </ol>
+  <div class="card project-block"><h3>별도 로봇 관제실</h3><p>로봇 20대가 같은 출고 배치를 하차·운반·분류·출차 배정·상차합니다. 공정 선후관계와 칸 점유를 확인하고 작업합니다. 백업 작업표를 보내면 45초 동안 사용할 수 있습니다. 연결을 복구할 때 중앙 스냅샷, 현장 인계 로그, 가상 스캔 기록이 일치하는지 확인합니다. 스캔 불일치 버튼으로 보류 사례를 재현할 수 있습니다.</p><div class="actions"><a class="secondary" href="/open/robot">로봇 관제실 열기 ↗</a></div></div>
+</section>
+<section class="section" id="evidence"><p class="eyebrow">02 / 원문 교차 검증</p><h2>기술 근거와 DAOS 적용 범위</h2>
+  <div class="table-wrap" tabindex="0" role="region" aria-label="문헌과 기술 비교"><table class="review-table">
+    <thead><tr><th>근거</th><th>원문이 다루는 내용</th><th>DAOS 적용과 한계</th></tr></thead>
+    <tbody>
+    <tr><th>Coda · Kistler와 Satyanarayanan, 1992</th><td>파일 캐시를 미리 채우고, 단절 중 작업한 변경을 재연결 뒤 통합합니다. <a href="https://www.cs.cmu.edu/~satya/docdir/kistler-tocs-coda-1992.pdf">저자 원문</a></td><td>기사 작업표 사전 저장과 재전송의 근거입니다. 작업표는 서버가 승인하고, 앱은 받은 범위에서만 운행합니다.</td></tr>
+    <tr><th>Local-first · Kleppmann 외, 2019</th><td>오프라인 접근과 여러 기기 협업을 설계 원칙으로 제안하며 CRDT를 활용한 사례를 소개합니다. <a href="https://martin.kleppmann.com/papers/local-first.pdf">저자 원문</a></td><td>기사 단말의 로컬 기록에 적용합니다. DAOS의 배차 승인과 복구 확정은 중앙 서버가 담당합니다.</td></tr>
+    <tr><th>SessionStore · Mortazavi 외, 2020</th><td>엣지 복제본 사이에서 이동하는 클라이언트에게 세션 일관성을 제공합니다. <a href="https://www.cs.toronto.edu/~mortazavi/papers/Sessionstore_Mortazavi.pdf">저자 원문</a></td><td>엣지 데이터 배치의 참고입니다. 클라우드 완전 단절 시 모든 로봇 업무 지속을 이 논문으로 입증할 수 없습니다.</td></tr>
+    <tr><th>CRDT 리뷰 · Almeida, 2024</th><td>충돌 없이 수렴하도록 설계된 자료형과 복제 방식을 정리합니다. 2023년은 초고 공개 연도이며 저널 논문은 2024년입니다. <a href="https://repositorio.inesctec.pt/server/api/core/bitstreams/d83841fa-9642-4162-aca9-50a7ae7b18e3/content">기관 저장소 원문</a></td><td>복제 상태의 수렴과 업무 제약은 별도입니다. 배차나 로봇 통로 권한은 자동 병합하지 않습니다.</td></tr>
+    <tr><th>엣지 로봇 · Afrin 외, 2019</th><td>로봇 워크플로의 실행 시간·에너지·비용을 함께 고려해 계산 자원을 할당합니다. <a href="https://doi.org/10.1016/j.future.2019.02.062">원 논문</a></td><td>엣지 배치의 설계 근거입니다. 장애 중 작업 지속과 복구 검증은 별도 실험이 필요합니다.</td></tr>
+    <tr><th>Bayou · Terry 외, 1995</th><td>단절 중 임시 쓰기, 의존성 검사, 병합, 주 복제본의 확정을 다룹니다. <a href="https://doi.org/10.1145/224056.224070">ACM 원문</a></td><td>기사 기록의 집하 → 구간 출발 → 배송 완료 순서를 서버에서 검사합니다. 논문의 복제 시스템 전체를 도입하지는 않았습니다.</td></tr>
+    <tr><th>Dynamo · DeCandia 외, 2007</th><td>대리 노드에 임시 보관하는 hinted handoff와 Merkle 트리 기반 복제본 대조를 설명합니다. <a href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf">저자 원문</a></td><td>복제 데이터 비교의 근거입니다. 해시 일치로 실물 위치나 오배송 여부를 판단할 수 없으므로 현재 시연은 이벤트와 가상 스캔을 대조합니다.</td></tr>
+    <tr><th>VDA 5050 3.0.0</th><td>차량과 관제 사이의 메시지, 승인된 Base와 이후 계획인 Horizon을 규정합니다. <a href="https://github.com/VDA5050/VDA5050/releases/tag/3.0.0">공식 규격 릴리스</a></td><td>사전 승인 범위를 나누는 설계에 참고했습니다. MQTT 어댑터, 실제 장비의 연결 단절 정책과 안전 검증은 후속 실증입니다.</td></tr>
+    <tr><th>Outbox와 펜싱</th><td>Outbox는 업무 변경과 전송할 기록을 함께 남기고 재전송 시 수신자가 중복을 처리합니다. Chubby는 자원 측에서 세대를 확인하는 시퀀서를 설명합니다. <a href="https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/transactional-outbox.html">AWS 설계 문서</a> · <a href="https://static.usenix.org/events/osdi06/tech/full_papers/burrows/burrows_html/index.html">Chubby 원문</a></td><td>기사 앱은 로컬 전송 대기열과 수신 확인을 씁니다. 서버는 리셋 전 배차 버전을 거부합니다. 로봇은 가상 로그의 운전 세대를 대조합니다.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="card project-block"><h3>실물 장비로 옮길 때 필요한 검증</h3><p>현장 자원 점유권은 자원별로 겹치지 않게 발급하고, 만료·시계 오차·통신 분할 때에도 장비 쪽에서 유효성을 검사해야 합니다. 로봇 시뮬레이션의 칸 예약, 운전 세대, 가상 스캔은 이 개념을 보여줍니다. 실제 장비 적용 단계에서는 독립적인 장애물 감지, 긴급 정지, 구역 제어 및 스캐너 측정을 검증합니다. 현장 시험에는 ROS 2와 Gazebo, 통로 비교에는 공개 MAPF 지도를 사용할 수 있습니다.</p><p><a href="https://gazebosim.org/docs/latest/ros_installation/">Gazebo와 ROS 조합</a> · <a href="https://movingai.com/benchmarks/mapf/">Moving AI 창고 지도</a> · <a href="https://cse.buffalo.edu/~demirbas/publications/hlc.pdf">하이브리드 논리 시계</a></p></div>
+  <div class="card project-block"><h3>산업 사례에서 확인한 범위</h3><p>Ocado는 Erith에서 로봇 세 대가 충돌해 화재가 발생했다고 발표했습니다. 그 발표에서 중앙 서버 장애가 원인이라고 확인되지는 않습니다. Amazon DeepFleet와 LG CNS 공개 자료는 이동 최적화와 이기종 통합 운영을 설명합니다. 이 자료만으로 각 시스템의 장애 대응 능력을 비교할 수는 없습니다.</p><p><a href="https://www.ocadogroup.com/newsroom/news/statement-regarding-incident-at-erith-customer-fulfilment-centre">Ocado 공식 발표</a> · <a href="https://www.amazon.science/blog/amazon-builds-first-foundation-model-for-multirobot-coordination">Amazon Science</a> · <a href="https://connect.lgcns.com/kr/service/rx/rx">LG CNS RX</a> · <a href="https://github.com/open-rmf/rmf">Open-RMF</a></p></div>
+</section>
+<section class="section" id="test"><p class="eyebrow">03 / 검증 계획</p><h2>같은 주문과 장애로 비교합니다</h2>
+  <ol class="scenario">
+   <li><strong>기준선</strong><p>같은 주문·로봇 배치·장애 시점에서 DAOS OFF와 ON을 각각 실행합니다. 시연과 실측을 분리합니다.</p></li>
+   <li><strong>기사 앱</strong><p>배차·기기 저장을 확인한 뒤 단절, 배송 기록, 재연결을 실행합니다. 재전송과 순서 위반, 이전 배차 버전을 시험합니다.</p></li>
+   <li><strong>로봇 관제실</strong><p>백업 미수신·유효시간 만료·스캔 불일치를 각각 재현합니다. 안전 정지와 확인 보류를 검증합니다.</p></li>
+   <li><strong>계측</strong><p>장애 처리량 유지율, 복구 후 정상화 시간, 중복·누락, 보류 건수, 점유 충돌을 비교합니다.</p></li>
+  </ol>
+  <div class="card project-block"><h3>비용과 처리량은 가정으로 구분</h3><p>보고서의 가정인 시간당 2,000라인, 30분 장애, 기존 복구 40분·제안 복구 5분을 적용하면 손실은 1,800라인과 450라인입니다. 이 경우 75% 감소는 시나리오 계산값입니다. 연 6회 기준 보고서의 긴급대응·인건비 가정을 합치면 직접 절감액은 약 776.5만원이며 시스템 도입·운영비를 빼기 전입니다.</p><p>2시간 장애에서 2,550라인이라는 추정은 처음 30분에 60%, 다음 90분에 30%를 유지하는 경우입니다. 처음 5분만 60%를 유지한다면 같은 식에서 약 2,800라인입니다. 실제 손익분기에는 작업 지속 시간, 장애 빈도, 구축비와 연간 운영비를 측정해야 합니다.</p></div>
+</section>
+</main>
+<footer class="shell bar"><span>DAOS · 프로젝트 기술 소개</span><a href="/#systems">통합 시연으로 돌아가기 ↗</a></footer>
+</body>
+</html>

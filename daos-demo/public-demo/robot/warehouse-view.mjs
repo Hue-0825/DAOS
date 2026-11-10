@@ -1,5 +1,5 @@
-import {BATCH,STAGES,Warehouse} from './warehouse-engine.mjs?v=3';
-import {createScene} from './warehouse-scene.mjs?v=3';
+import {BATCH,STAGES,Warehouse,BACKUP_LIFETIME_MS} from './warehouse-engine.mjs?v=4';
+import {createScene} from './warehouse-scene.mjs?v=4';
 
 const $=id=>document.getElementById(id);
 const canvas=$('warehouse');
@@ -16,6 +16,7 @@ const INCIDENTS={
   backup:['↻','현장 자율운전 · 로봇 간 인계 재개','받아 둔 작업표로 이어서 처리합니다. 지도에는 각 로봇이 수행 중인 공정과 대기 상태를 표시합니다.'],
   stopped:['■','안전 정지 · DAOS 꺼짐','현재 위치에서 대기합니다. 서버를 복구하거나 DAOS를 켜면 조건에 따라 작업을 이어갑니다.'],
   waiting:['…','백업 작업표 미수신','서버를 복구한 뒤 오른쪽 위에서 백업 작업표를 전송해 주세요.'],
+  expired:['■','백업 작업표 만료 · 안전 정지','예약한 이동 칸까지만 도달한 뒤 대기합니다. 연결 복구 후 기록을 대조합니다.'],
   drained:['✓','현장 작업표 처리 완료','저장한 물량의 상차를 마쳤습니다. 다음 작업표를 받으려면 연결을 복구해 주세요.'],
 };
 function set(id,text){if($(id).textContent!==text)$(id).textContent=text;}
@@ -52,6 +53,9 @@ function paint(){
   $('mode').dataset.mode=sim.mode;
   $('incident').dataset.phase=phase;
   $('send-backup').disabled=!online;
+  $('scan-mismatch').hidden=phase!=='backup';
+  $('audit-result').hidden=!sim.audit;
+  if(sim.audit)set('audit-result',`복구 3중 대조 · 일치 ${sim.audit.verified}개 / 확인 보류 ${sim.audit.held}개 · 운전 세대 ${sim.epoch}`);
   $('daos-switch').setAttribute('aria-checked',String(sim.daosEnabled));
   connection.dataset.recover=String(!online);
   set('daos-value',sim.daosEnabled?'ON':'OFF');
@@ -61,10 +65,11 @@ function paint(){
   set('incident-icon',icon);
   set('incident-title',title);
   set('incident-detail',detail);
-  set('drive-mode',{online:'정상 운전',alert:'상태 확인',backup:'현장 자율운전',stopped:'안전 정지',waiting:'백업 대기',drained:'작업 완료'}[phase]);
+  set('drive-mode',{online:'정상 운전',alert:'상태 확인',backup:'현장 자율운전',stopped:'안전 정지',waiting:'백업 대기',expired:'유효기간 만료',drained:'작업 완료'}[phase]);
   set('batch',BATCH);
   set('total',`${jobs.length-finished}개 남음`);
-  set('backup',sim.backupAt===null?'미전송':`${sim.backupRemaining}개 남음`);
+  const remaining=Math.max(0,Math.ceil((sim.backupAt+BACKUP_LIFETIME_MS-Date.now())/1000));
+  set('backup',sim.backupAt===null?'미전송':`${sim.backupRemaining}개 · ${remaining}초`);
   set('completed',`${finished} / ${jobs.length}개`);
   set('pending',online?`복구 합산 ${sim.synced}건`:`복구 대기 ${sim.pending}건`);
   const moving=!paused&&(online||phase==='backup')?sim.robots.filter(robot=>robot.next||robot.job).length:0;
@@ -101,14 +106,19 @@ function paint(){
 
 $('send-backup').addEventListener('click',()=>{
   if(sim.sendBackup()){
-    set('backup-result',`현장 작업표 전송 완료 · 상자 ${sim.backup.size}개를 현장에 저장했습니다.`);
+    set('backup-result',`현장 작업표 전송 완료 · 상자 ${sim.backup.size}개 · 시연 유효시간 ${BACKUP_LIFETIME_MS/1000}초`);
     paint();
   }
+});
+$('scan-mismatch').addEventListener('click',()=>{
+  const injected=sim.injectScanMismatch();
+  set('backup-result',injected?'가상 스캔 불일치를 만들었습니다. 연결을 복구하면 해당 상자가 보류됩니다.':'완료된 인계 기록이 생긴 뒤 스캔 오류를 재현할 수 있습니다.');
+  paint();
 });
 $('daos-switch').addEventListener('click',()=>{sim.setDaos(!sim.daosEnabled);paint();});
 $('connection').addEventListener('click',()=>{
   if(sim.mode==='online')sim.disconnect();
-  else sim.restore();
+  else {sim.restore();set('backup-result','현장 작업표 미전송 · 다음 장애 시연 전에 다시 보내 주세요.');}
   paint();
 });
 $('pause').addEventListener('click',()=>{paused=!paused;paint();});

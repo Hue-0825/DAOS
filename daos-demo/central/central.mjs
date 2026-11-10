@@ -25,6 +25,8 @@ function render(){
   $('connection-toggle').disabled=changingConnection||resetting;
   $('region-note').textContent=`${province} 허브 · 접수 ${rows.length}건`;
   $('count').textContent=`전체 ${data.orders.length}건 중 ${rows.length}건 표시`;
+  const confirmed=rows.filter(order=>order.delivered).length;
+  $('validation-summary').textContent=`서버 배송 완료 ${confirmed}건 · 배차 버전과 집하·배송 순서를 확인한 기록을 원장에 반영합니다.`;
   const sent=data.releasedDates.includes(date);
   const staged=data.stagedDates.includes(date);
   $('release-panel').hidden=!staged;

@@ -37,12 +37,18 @@ function pathTo(start, end, blocked) {
 }
 
 export const OUTAGE_ALERT_MS = 2000;
+export const BACKUP_LIFETIME_MS = 45000;
 
 export class Warehouse {
   constructor() {
     this.jobs = new Map();
     this.backup = new Set();
     this.backupAt = null;
+    this.epoch = 1;
+    this.centralStages = new Map();
+    this.physicalScans = new Map();
+    this.localTransfers = [];
+    this.audit = null;
     this.mode = 'online';
     this.daosEnabled = true;
     this.outageAt = null;
@@ -57,6 +63,7 @@ export class Warehouse {
         const id=`${BATCH}-${String(this.jobs.size+1).padStart(2,'0')}`;
         const position=(i+start)%9;
         this.jobs.set(id,{id,stage,segment:position%3,lane:Math.floor(position/3),robot:null});
+        this.physicalScans.set(id,stage);
       }
     }
     this.note('관제',`출고 배치 ${BATCH} · 상자 ${this.jobs.size}개, 진행 중인 공정부터 이어서 작업합니다.`);
@@ -74,21 +81,57 @@ export class Warehouse {
   }
   sendBackup(now=Date.now()) {
     if (this.mode !== 'online') return false;
-    this.backup = new Set([...this.jobs.values()].filter(job=>job.stage<STAGES.length).map(job=>job.id));
+    this.backup = new Set([...this.jobs.values()].filter(job=>!job.auditHold&&job.stage<STAGES.length).map(job=>job.id));
     this.backupAt = now;
     this.note('백업',`현장 작업표 전송 완료 · 상자 ${this.backup.size}개`);
     return true;
   }
   restore() {
     if (this.mode !== 'offline') return;
+    const grouped=new Map();
+    for (const event of this.localTransfers) {
+      const group=grouped.get(event.id)??[];
+      group.push(event);
+      grouped.set(event.id,group);
+    }
+    let verified=0,held=0,confirmedEvents=0;
+    for(const [id,group] of grouped){
+      const job=this.jobs.get(id);
+      let stage=this.centralStages.get(id);
+      const continuous=group.every(event=>event.epoch===this.epoch&&event.from===stage&&event.to===++stage);
+      if(continuous&&stage===job.stage&&this.physicalScans.get(id)===stage){
+        verified++;
+        confirmedEvents+=group.length;
+      } else {
+        job.auditHold=true;
+        held++;
+      }
+    }
+    this.audit={verified,held};
     this.mode = 'online';
-    const count = this.pending;
-    this.synced += count;
+    this.epoch++;
+    this.synced += confirmedEvents;
     this.pending = 0;
-    this.note('관제',`서버 복구 · 현장 공정 기록 ${count}건을 합쳐 정상 운전으로 복귀했습니다.`);
+    this.localTransfers = [];
+    this.backup.clear();
+    this.backupAt = null;
+    this.note('관제',`서버 복구 · 3중 대조 일치 ${verified}개, 확인 보류 ${held}개 · 운전 세대 ${this.epoch}`);
+  }
+  injectScanMismatch() {
+    if(this.mode!=='offline')return false;
+    const candidate=this.localTransfers.findLast(event=>{
+      const job=this.jobs.get(event.id);
+      return !job.robot&&!job.auditHold;
+    });
+    if(!candidate)return false;
+    const job=this.jobs.get(candidate.id);
+    job.auditHold=true;
+    this.physicalScans.set(job.id,Math.max(0,job.stage-1));
+    this.note('스캔',`${job.id} · 가상 스캔 위치 불일치, 상자를 확인 대기에 둡니다.`);
+    return true;
   }
   get backupRemaining() {
-    return [...this.backup].filter(id=>this.jobs.get(id).stage<STAGES.length).length;
+    return [...this.backup].filter(id=>{const job=this.jobs.get(id);return !job.auditHold&&job.stage<STAGES.length;}).length;
   }
   buffers() {
     const buffers=new Map();
@@ -111,6 +154,7 @@ export class Warehouse {
     if (this.mode === 'offline') return;
     this.mode = 'offline';
     this.outageAt = now;
+    this.centralStages = new Map([...this.jobs].map(([id,job])=>[id,job.stage]));
     this.reportedPhase = null;
     this.note('관제','서버 연결 끊김 · 로봇 20대에 장애 경고를 표시합니다.');
   }
@@ -119,6 +163,7 @@ export class Warehouse {
     if (now - this.outageAt < OUTAGE_ALERT_MS) return 'alert';
     if (!this.daosEnabled) return 'stopped';
     if (this.backupAt===null) return 'waiting';
+    if (now>=this.backupAt+BACKUP_LIFETIME_MS) return 'expired';
     if (this.backupRemaining || this.robots.some(robot=>key(robot.cell)!==key(robot.home))) return 'backup';
     return 'drained';
   }
@@ -129,6 +174,7 @@ export class Warehouse {
       backup:'현장 자율운전 · 받은 작업표로 로봇 간 인계를 재개합니다.',
       waiting:'작업표 미수신 · 로봇이 백업 작업표를 기다립니다.',
       drained:'백업 작업표의 공정을 모두 마쳤습니다. 추가 물량을 기다립니다.',
+      expired:'백업 작업표가 만료되었습니다. 새 이동과 인계를 중지합니다.',
     };
     if (phase === this.reportedPhase || !messages[phase]) return;
     this.reportedPhase = phase;
@@ -159,7 +205,8 @@ export class Warehouse {
   }
   robotStatus(robot,phase) {
     if (phase==='alert') return '장애 감지';
-    if (phase==='stopped') return '안전 정지';
+    if (phase==='stopped'||phase==='expired') return '안전 정지';
+    if(robot.job?.auditHold)return '스캔 확인 대기';
     if (phase==='waiting') return '작업표 대기';
     if (phase==='drained') return '작업 완료';
     if (!robot.job) return key(robot.cell)===key(robot.home)?'인계 대기':'복귀 중';
@@ -167,13 +214,18 @@ export class Warehouse {
     return robot.fetching?'인수 중':`${STAGES[robot.stage].label} 중`;
   }
   tick(dt,now=Date.now()) {
-    if (this.mode !== 'online' && this.offlinePhase(now) !== 'backup') return;
+    const phase=this.offlinePhase(now);
+    if(phase==='expired'){
+      for(const robot of this.robots) this.advanceRobot(robot,dt);
+      return;
+    }
+    if (this.mode !== 'online' && phase !== 'backup') return;
     const occupied = new Set(this.robots.flatMap(robot => [key(robot.cell),...(robot.next?[key(robot.next)]:[])]));
     const reserved = new Set(this.robots.flatMap(robot=>robot.stations));
     for (const robot of this.robots) {
       if (!robot.job && !robot.next && key(robot.cell)===key(robot.home)) {
         for (const job of this.jobs.values()) {
-          if (job.robot || job.stage!==robot.stage || (!this.backup.has(job.id)&&this.mode==='offline') || !this.canHandoff(job)) continue;
+          if (job.robot || job.auditHold || job.stage!==robot.stage || (!this.backup.has(job.id)&&this.mode==='offline') || !this.canHandoff(job)) continue;
           const pickup = this.pickupFor(robot.stage,job);
           const goal = this.goalFor(robot.stage,job);
           const stations = (pickup?[pickup,goal]:[goal]).map(key);
@@ -198,7 +250,9 @@ export class Warehouse {
           robot.work = 0;
           continue;
         }
-        job.stage++;
+        const from=job.stage++;
+        this.physicalScans.set(job.id,job.stage);
+        if(this.mode==='offline')this.localTransfers.push({id:job.id,from,to:job.stage,epoch:this.epoch});
         robot.done++;
         const next = STAGES[job.stage]?.label;
         this.note(robot.id,`${job.id} · ${next?`${STAGES[robot.stage].label} 완료 → ${next} 인계`:'트럭 상차 완료'}`,this.mode==='offline');
@@ -218,14 +272,18 @@ export class Warehouse {
         robot.route = [];
         continue;
       }
-      robot.progress = Math.min(1,robot.progress + dt*5.8);
-      robot.position = robot.cell.map((value,i)=>value+(robot.next[i]-value)*robot.progress);
-      if (robot.progress === 1) {
-        occupied.delete(key(robot.cell));
-        robot.cell = robot.next;
-        robot.next = null;
-        robot.progress = 0;
-      }
+      this.advanceRobot(robot,dt,occupied);
+    }
+  }
+  advanceRobot(robot,dt,occupied) {
+    if(!robot.next)return;
+    robot.progress = Math.min(1,robot.progress + dt*5.8);
+    robot.position = robot.cell.map((value,i)=>value+(robot.next[i]-value)*robot.progress);
+    if (robot.progress === 1) {
+      occupied?.delete(key(robot.cell));
+      robot.cell = robot.next;
+      robot.next = null;
+      robot.progress = 0;
     }
   }
 }

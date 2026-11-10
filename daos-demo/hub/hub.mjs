@@ -36,6 +36,9 @@ function render(){
   $('count').textContent=`${orders.length}건`;
   $('driver').textContent=`${province} 시연 기사 1`;
   $('backup').textContent=!data.revision?'배차 확정 전':data.receipt?.revision===data.revision?'백업 완료':'기사 앱 저장 대기';
+  const storedRevision=data.receipt?.revision;
+  const delivered=orders.filter(order=>order.delivered).length;
+  $('validation-summary').textContent=`서버 배송 완료 ${delivered}건 · 배차 버전 ${data.revision||'—'} / 기사 기기 저장 확인 ${storedRevision||'—'}`;
   function groupList(dispatched){
     return [...groups.entries()].map(([key,{region,segment,rows:groupRows}])=>{
       const rows=groupRows.filter(order=>Boolean(order.dispatch_revision)===dispatched);

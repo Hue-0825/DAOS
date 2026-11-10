@@ -1,4 +1,4 @@
-import {PARKING,RACKS,SIZE,STAGES} from './warehouse-engine.mjs?v=3';
+import {PARKING,RACKS,SIZE,STAGES} from './warehouse-engine.mjs?v=4';
 
 const W=1320,H=700;
 const project=(x,y,z=0)=>[540+(x-y)*20,69+(x+y)*10.7-z];
@@ -156,7 +156,7 @@ export function createScene(canvas){
   function drawStatus(robot,phase,label){
     const [x,y]=project(...robot.position);
     const width=label==='!'?23:Math.max(34,label.length*10+10);
-    const fill=phase==='alert'?'#ffd069':phase==='stopped'?'#ffc8c0':
+    const fill=phase==='alert'?'#ffd069':(phase==='stopped'||phase==='expired')?'#ffc8c0':
       phase==='waiting'||phase==='drained'||!robot.job?'#dce5ef':STAGES[robot.stage].color;
     ctx.fillStyle=fill;
     ctx.beginPath();

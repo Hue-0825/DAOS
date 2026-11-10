@@ -295,6 +295,14 @@ function render() {
     const when = timeFormat.format(new Date(db.snapshot.at));
     status = offline ? `저장한 작업표를 사용합니다. 마지막 갱신 ${when}` : `운행일과 다음날 작업표 · 마지막 갱신 ${when}`;
   }
+  const verification=$('recovery-check');
+  verification.hidden=Boolean(db.baseline);
+  if(!db.baseline){
+    const held=(db.unverified??[]).filter(id=>db.pending.some(event=>event.id===id)).length;
+    verification.textContent=held?`검증 보류 ${held}건 · 서버에서 순서나 배차 버전을 확인하지 못한 기록은 기기에 남겨 둡니다.`:
+      db.pending.length?'미동기화 기록은 서버에서 배차 버전과 집하·배송 순서를 검증한 뒤 확정합니다.':
+      '동기화 검증 · 서버가 접수 확인한 기록만 전송 대기에서 제거합니다.';
+  }
   const pending = db.baseline ? '' : db.pending.length ? `미동기화 기록 ${db.pending.length}건` : shellReady ? '오프라인 지도 준비됨' : '';
   $('status').innerHTML = `<span class="status-icon" aria-hidden="true">${offline ? '◈' : '✓'}</span><div class="status-text"><strong>${title}</strong> · ${status}</div><span class="sync-count${!db.baseline && db.pending.length ? ' pending-count' : ''}">${pending}</span>`;
   const dates=[displayedDate,tomorrow(displayedDate)];
@@ -509,9 +517,12 @@ async function loadWork() {
       connected = true;
       return;
     }
-    const batch = db.pending.slice(0,40);
+    const previouslyHeld=new Set(db.unverified??[]);
+    const batch=[...db.pending.filter(event=>!previouslyHeld.has(event.id)),...db.pending.filter(event=>previouslyHeld.has(event.id))].slice(0,40);
     const result = batch.length ? await driverRequest('/events', { mode, events:batch }) : { acknowledged:[] };
     const acknowledged = new Set(result.acknowledged);
+    const attempted=new Set(batch.map(event=>event.id));
+    const unverified=[...(db.unverified??[]).filter(id=>!attempted.has(id)&&db.pending.some(event=>event.id===id)),...(result.unverified??[])];
     const confirmed = [...new Map([...db.confirmed,...remote,...batch.filter(event => acknowledged.has(event.id))]
       .map(event => [event.id,event])).values()];
     const pending = db.pending.filter(event => !acknowledged.has(event.id));
@@ -520,9 +531,9 @@ async function loadWork() {
     const available = [...jobs,...retain].filter(job => !expired(completions[job.date]));
     changed = changed || !db.snapshot || db.snapshot.revision !== revision
       || db.snapshot.date !== requestedDate || JSON.stringify(db.snapshot.schedule)!==JSON.stringify(schedule) || pending.length !== db.pending.length
-      || confirmed.length !== db.confirmed.length;
+      || confirmed.length !== db.confirmed.length || JSON.stringify(unverified)!==JSON.stringify(db.unverified??[]);
     if (changed && !save({ ...db, resets, snapshot:{ at:new Date().toISOString(), date:requestedDate, revision, jobs:available,schedule },
-      pending, confirmed, completedDays:completions })) return;
+      pending, confirmed, unverified, completedDays:completions })) return;
     connected = true;
     if (revision && db.snapshot.receipt !== revision) {
       await driverRequest('/receipt', { revision });

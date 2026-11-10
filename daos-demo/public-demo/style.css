@@ -77,3 +77,12 @@ footer a{color:var(--accent);font-weight:750}
 .legacy-access{width:100%;border-top:1px solid var(--line);padding-top:10px;margin-top:3px;font-size:13px;color:var(--muted)}
 .legacy-access summary{cursor:pointer}
 .legacy-access .access-form{margin-top:8px}
+.project-block{padding:16px;margin-top:12px}
+.project-block h3{font-size:16px;margin:0 0 6px}
+.project-block p{font-size:14px;color:var(--muted);margin-top:6px}
+.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px;background:white}
+.review-table{width:100%;border-collapse:collapse;min-width:640px;font-size:13px;line-height:1.58;text-align:left}
+.review-table th,.review-table td{padding:10px 12px;vertical-align:top;border-bottom:1px solid var(--line)}
+.review-table thead{background:var(--tint);color:#433670}.review-table tbody th{width:20%}
+.review-table tr:last-child th,.review-table tr:last-child td{border-bottom:0}
+.project-block a:not(.secondary),.review-table a{color:var(--accent);font-weight:750;text-decoration:underline;text-underline-offset:2px}

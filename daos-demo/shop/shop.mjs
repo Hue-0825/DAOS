@@ -65,15 +65,20 @@ function detail(){
   chooseStops();
   total();
 }
+let submission;
 $('checkout').addEventListener('submit',async event=>{
   event.preventDefault();
   $('submit').disabled=true;
   try{
     const fields=Object.fromEntries(['province','destination','recipient','instructions'].map(id=>[id,$(id).value]));
+    const payload={...fields,quantity:$('quantity').valueAsNumber,product};
+    const signature=JSON.stringify(payload);
+    if(submission?.signature!==signature)submission={signature,requestId:crypto.randomUUID?.()};
     const response=await fetch('/api/shop/orders',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({...fields,quantity:$('quantity').valueAsNumber,product})});
+      body:JSON.stringify({...payload,requestId:submission.requestId})});
     const result=await response.json();
     if(!response.ok)throw Error(result.error);
+    submission=null;
     try{
       sessionStorage.setItem('daos-recent-order',JSON.stringify(result));
       location.assign(`?complete=${encodeURIComponent(result.number)}`);

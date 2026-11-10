@@ -1,4 +1,4 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DAOS 메인 서버</title><link rel="stylesheet" href="style.css?v=23"><script type="module" src="central.mjs?v=22"></script></head>
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DAOS 메인 서버</title><link rel="stylesheet" href="style.css?v=23"><script type="module" src="central.mjs?v=23"></script></head>
 <body><header><strong>DAOS 메인 서버</strong><span id="server-state" class="server-state" role="status">서버 확인 중</span></header><main>
 <div class="intro"><h1>메인 관제센터</h1></div>
 <nav class="card service-nav" aria-label="DAOS 운영 웹">
@@ -20,6 +20,6 @@
 <div class="toolbar"><label class="history">배송일<select id="history-date"><option value="all">전체 배송일</option></select></label>
 <label class="history">배송 시간대<select id="history-slot"><option value="all">전체 시간대</option><option value="0">06:00–12:00</option><option value="1">12:00–18:00</option><option value="2">18:00–24:00</option></select></label></div>
 <div id="release-panel" hidden><button id="release-date" type="button"></button><p id="release-result" role="status"></p></div>
-<p id="count" role="status"></p>
+<p id="count" role="status"></p><p id="validation-summary"></p>
 <div class="sheet-scroll" role="region" aria-label="메인 서버 주문 원장" tabindex="0"><table><thead><tr><th>접수 번호</th><th>접수·배송일</th><th>고객</th><th>상품</th><th>주소·인계</th><th>담당 허브</th><th>상태</th></tr></thead><tbody id="orders"></tbody></table></div>
 </section></main></body></html>

@@ -20,7 +20,7 @@
 | 기사 앱 | [기사 앱 웹 화면](https://daos-phone-driver.ryker6365.chatgpt.site/driver/) |
 | 물류센터 | [로봇 관제실](https://daos-logistics.ryker6365.chatgpt.site/robot/) |
 
-처음 참여하는 분은 역할별 공유 링크로 로그인해 접속을 활성화해 주세요. 로봇 관제실은 메인 관제센터 권한을 사용합니다.
+통합 시연 사이트에서 ChatGPT로 로그인한 뒤 시연 비밀번호를 한 번 입력하면 모든 운영 웹을 열 수 있습니다.
 
 ## 구현 범위
 

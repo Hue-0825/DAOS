@@ -85,22 +85,23 @@ async function portalAccess(request,url,env,user,email,key) {
       `<a class="primary" href="/signin-with-chatgpt?return_to=${encodeURIComponent(returnPath)}" target="_top">ChatGPT로 로그인</a>`);
   }
   if(await verify(key,'portal',user,sessionToken(request,portalCookie)))return redirect(dest);
-  let token=null;
+  let value='';
   if(request.method==='POST'){
     if(request.headers.get('Origin')!==url.origin)return json({error:'잘못된 요청입니다.'},403);
     const fields=new URLSearchParams(await request.text());
-    token=shareCode(fields.get('share')?.trim()??'');
+    value=(fields.get('access')??fields.get('share')??'').trim();
   }
-  const allowed=await operatorAllowed(email,token,env);
+  const passwordAccepted=Boolean(env.DAOS_DEMO_PASSWORD && value===env.DAOS_DEMO_PASSWORD);
+  const allowed=passwordAccepted||await operatorAllowed(email,shareCode(value),env);
   if(allowed){
     const session=await signed(key,'portal',user,String(Math.floor(Date.now()/1000)+portalLifetime));
     return redirect(dest,{'Set-Cookie':`${portalCookie}=${session}; Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age=${portalLifetime}`});
   }
   const prompt=allowed===null?'지금은 메인 서버에서 권한을 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.':
-    request.method==='POST'?'메인 관제센터 공유 링크를 확인해 주세요.':'처음 한 번만 받은 메인 관제센터 공유 링크를 입력해 운영 권한을 확인합니다.';
+    request.method==='POST'?'시연 비밀번호를 다시 확인해 주세요.':'시연 비밀번호를 한 번 입력하면 모든 운영 웹을 열 수 있습니다.';
   return accessPage(prompt,`<form class="access-form" method="post" action="${returnPath}">
-    <label for="share">메인 관제센터 공유 링크</label><input id="share" name="share" type="password" autocomplete="off" maxlength="300" required>
-    <button class="primary" type="submit">시연 권한 확인</button></form>`);
+    <label for="access">시연 비밀번호</label><input id="access" name="access" type="password" autocomplete="off" autocapitalize="none" maxlength="300" required>
+    <button class="primary" type="submit">운영 웹 열기</button><small>기존 공유 링크도 이 칸에 입력할 수 있습니다.</small></form>`);
 }
 async function roleGrant(secret,role) {
   const expires=String(Math.floor(Date.now()/1000)+90),nonce=crypto.randomUUID();
@@ -118,7 +119,7 @@ export default {
     const portalSession=key&&await verify(key,'portal',user,sessionToken(request,portalCookie));
     if(path==='/access'&&['GET','POST'].includes(request.method))return portalAccess(request,url,env,user,email,key);
     if(path==='/'||path==='/index.html'){
-      const label=portalSession?'통합 로그인 완료':user?'시연 권한 확인':'통합 로그인';
+      const label=portalSession?'통합 로그인 완료':user?'시연 비밀번호 입력':'통합 로그인';
       const nav=portalSession?`<span class="access-badge">${label}</span>`:`<a class="access-badge" href="/access">${label}</a>`;
       return new Response(request.method==='HEAD'?null:ASSETS['/index.html'].replace('<!-- DAOS_ACCESS -->',nav),
         {headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'private, no-store'}});
@@ -149,9 +150,7 @@ export default {
     if (portalSession || (key && email && await verify(key,'session',email,readCookie(request)))) {
       return asset('/robot/index.html',request,privateHeaders);
     }
-    return email?
-      page('메인 관제센터에 로그인한 계정의 접근 권한을 확인합니다.',`<a href="${central}/central/robot-access">메인 관제센터 권한 확인 →</a>`):
-      page('메인 관제센터에 사용하는 ChatGPT 계정으로 로그인해 주세요.',
-        '<a href="/signin-with-chatgpt?return_to=%2Frobot%2F" target="_top">ChatGPT로 로그인 →</a>');
+    return page('통합 사이트에서 ChatGPT 로그인과 시연 비밀번호를 확인하면 로봇 관제실을 열 수 있습니다.',
+      '<a href="/access?next=robot">통합 로그인 →</a>');
   },
 };

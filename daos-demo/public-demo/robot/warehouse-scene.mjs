@@ -1,4 +1,4 @@
-import {PARKING,RACKS,SIZE,STAGES} from './warehouse-engine.mjs?v=4';
+import {PARKING,RACKS,SIZE,STAGES} from './warehouse-engine.mjs?v=5';
 
 const W=1320,H=700;
 const project=(x,y,z=0)=>[540+(x-y)*20,69+(x+y)*10.7-z];
@@ -185,7 +185,7 @@ export function createScene(canvas){
       .sort((a,b)=>a.depth-b.depth);
     for(const object of sorted)object.draw(ctx);
     for(const label of signs)sign(ctx,...label);
-    const phase=sim.offlinePhase()??'online';
+    const phase=sim.alarmActive()?'alert':sim.offlinePhase()??'online';
     for(const robot of sim.robots){
       if(phase!=='online'||robot.id===selected)drawStatus(robot,phase,phase==='alert'?'!':sim.robotStatus(robot,phase));
     }

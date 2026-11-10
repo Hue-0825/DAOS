@@ -38,9 +38,10 @@ function pathTo(start, end, blocked) {
 
 export const OUTAGE_ALERT_MS = 2000;
 export const BACKUP_LIFETIME_MS = 45000;
+const BACKUP_REFRESH_MS = 10000;
 
 export class Warehouse {
-  constructor() {
+  constructor(now=Date.now()) {
     this.jobs = new Map();
     this.backup = new Set();
     this.backupAt = null;
@@ -67,6 +68,7 @@ export class Warehouse {
       }
     }
     this.note('관제',`출고 배치 ${BATCH} · 상자 ${this.jobs.size}개, 진행 중인 공정부터 이어서 작업합니다.`);
+    this.maintainBackup(now);
   }
   resetFleet() {
     this.robots = STAGES.flatMap((role,stage) => Array.from({length:role.count},(_,n) => {
@@ -79,14 +81,19 @@ export class Warehouse {
     this.events.unshift({actor,text,local,at:new Date().toLocaleTimeString('ko-KR',{hour12:false})});
     this.events.length=Math.min(this.events.length,75);
   }
-  sendBackup(now=Date.now()) {
+  sendBackup(now=Date.now(), log=true) {
     if (this.mode !== 'online') return false;
     this.backup = new Set([...this.jobs.values()].filter(job=>!job.auditHold&&job.stage<STAGES.length).map(job=>job.id));
     this.backupAt = now;
-    this.note('백업',`현장 작업표 전송 완료 · 상자 ${this.backup.size}개`);
+    if(log)this.note('백업',`현장 작업표 전송 완료 · 상자 ${this.backup.size}개`);
     return true;
   }
-  restore() {
+  maintainBackup(now) {
+    if(this.mode==='online'&&(this.backupAt===null||now-this.backupAt>=BACKUP_REFRESH_MS)){
+      this.sendBackup(now,false);
+    }
+  }
+  restore(now=Date.now()) {
     if (this.mode !== 'offline') return;
     const grouped=new Map();
     for (const event of this.localTransfers) {
@@ -115,6 +122,7 @@ export class Warehouse {
     this.localTransfers = [];
     this.backup.clear();
     this.backupAt = null;
+    this.maintainBackup(now);
     this.note('관제',`서버 복구 · 3중 대조 일치 ${verified}개, 확인 보류 ${held}개 · 운전 세대 ${this.epoch}`);
   }
   injectScanMismatch() {
@@ -158,9 +166,11 @@ export class Warehouse {
     this.reportedPhase = null;
     this.note('관제','서버 연결 끊김 · 로봇 20대에 장애 경고를 표시합니다.');
   }
+  alarmActive(now=Date.now()) {
+    return this.mode==='offline'&&now-this.outageAt<OUTAGE_ALERT_MS;
+  }
   offlinePhase(now=Date.now()) {
     if (this.mode !== 'offline') return null;
-    if (now - this.outageAt < OUTAGE_ALERT_MS) return 'alert';
     if (!this.daosEnabled) return 'stopped';
     if (this.backupAt===null) return 'waiting';
     if (now>=this.backupAt+BACKUP_LIFETIME_MS) return 'expired';
@@ -171,7 +181,7 @@ export class Warehouse {
     const phase = this.offlinePhase(now);
     const messages = {
       stopped:'DAOS OFF · 서버가 복구될 때까지 로봇 공정을 정지합니다.',
-      backup:'현장 자율운전 · 받은 작업표로 로봇 간 인계를 재개합니다.',
+      backup:'현장 자율운전 · 받은 작업표로 로봇 간 인계를 계속합니다.',
       waiting:'작업표 미수신 · 로봇이 백업 작업표를 기다립니다.',
       drained:'백업 작업표의 공정을 모두 마쳤습니다. 추가 물량을 기다립니다.',
       expired:'백업 작업표가 만료되었습니다. 새 이동과 인계를 중지합니다.',
@@ -204,7 +214,6 @@ export class Warehouse {
     return stage < 2 ? this.station(stage,job) : null;
   }
   robotStatus(robot,phase) {
-    if (phase==='alert') return '장애 감지';
     if (phase==='stopped'||phase==='expired') return '안전 정지';
     if(robot.job?.auditHold)return '스캔 확인 대기';
     if (phase==='waiting') return '작업표 대기';

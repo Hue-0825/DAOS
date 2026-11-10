@@ -1,5 +1,5 @@
-import {BATCH,STAGES,Warehouse,BACKUP_LIFETIME_MS} from './warehouse-engine.mjs?v=4';
-import {createScene} from './warehouse-scene.mjs?v=4';
+import {BATCH,STAGES,Warehouse,BACKUP_LIFETIME_MS} from './warehouse-engine.mjs?v=5';
+import {createScene} from './warehouse-scene.mjs?v=5';
 
 const $=id=>document.getElementById(id);
 const canvas=$('warehouse');
@@ -12,8 +12,7 @@ let lastPaint=0;
 let visibleEvent;
 const INCIDENTS={
   online:['✓','서버 연결 · 공동 작업 중','20대가 같은 출고 배치의 작업표를 공유합니다. 공정을 마친 상자는 다음 로봇에게 인계합니다.'],
-  alert:['!','연결 이상 감지 · 잠시 정지','이동을 멈추고 작업표와 공정 위치를 확인합니다.'],
-  backup:['↻','현장 자율운전 · 로봇 간 인계 재개','받아 둔 작업표로 이어서 처리합니다. 지도에는 각 로봇이 수행 중인 공정과 대기 상태를 표시합니다.'],
+  backup:['↻','현장 자율운전 · 로봇 간 인계 계속','받아 둔 작업표로 이어서 처리합니다. 지도에는 각 로봇이 수행 중인 공정과 대기 상태를 표시합니다.'],
   stopped:['■','안전 정지 · DAOS 꺼짐','현재 위치에서 대기합니다. 서버를 복구하거나 DAOS를 켜면 조건에 따라 작업을 이어갑니다.'],
   waiting:['…','백업 작업표 미수신','서버를 복구한 뒤 오른쪽 위에서 백업 작업표를 전송해 주세요.'],
   expired:['■','백업 작업표 만료 · 안전 정지','예약한 이동 칸까지만 도달한 뒤 대기합니다. 연결 복구 후 기록을 대조합니다.'],
@@ -47,11 +46,14 @@ const stages=STAGES.map(role=>{
 
 function paint(){
   const online=sim.mode==='online',phase=sim.offlinePhase()??'online';
-  const [icon,title,detail]=INCIDENTS[phase];
+  const alarm=sim.alarmActive();
+  const [icon,title,detail]=alarm
+    ? ['!',phase==='backup'?'서버 장애 감지 · 백업 운전 계속':'서버 장애 감지',INCIDENTS[phase][2]]
+    : INCIDENTS[phase];
   const jobs=[...sim.jobs.values()],finished=jobs.filter(job=>job.stage===STAGES.length).length;
   const connection=$('connection');
   $('mode').dataset.mode=sim.mode;
-  $('incident').dataset.phase=phase;
+  $('incident').dataset.phase=alarm?'alert':phase;
   $('send-backup').disabled=!online;
   $('scan-mismatch').hidden=phase!=='backup';
   $('audit-result').hidden=!sim.audit;
@@ -65,7 +67,7 @@ function paint(){
   set('incident-icon',icon);
   set('incident-title',title);
   set('incident-detail',detail);
-  set('drive-mode',{online:'정상 운전',alert:'상태 확인',backup:'현장 자율운전',stopped:'안전 정지',waiting:'백업 대기',expired:'유효기간 만료',drained:'작업 완료'}[phase]);
+  set('drive-mode',{online:'정상 운전',backup:'현장 자율운전',stopped:'안전 정지',waiting:'백업 대기',expired:'유효기간 만료',drained:'작업 완료'}[phase]);
   set('batch',BATCH);
   set('total',`${jobs.length-finished}개 남음`);
   const remaining=Math.max(0,Math.ceil((sim.backupAt+BACKUP_LIFETIME_MS-Date.now())/1000));
@@ -118,14 +120,14 @@ $('scan-mismatch').addEventListener('click',()=>{
 $('daos-switch').addEventListener('click',()=>{sim.setDaos(!sim.daosEnabled);paint();});
 $('connection').addEventListener('click',()=>{
   if(sim.mode==='online')sim.disconnect();
-  else {sim.restore();set('backup-result','현장 작업표 미전송 · 다음 장애 시연 전에 다시 보내 주세요.');}
+  else {sim.restore();set('backup-result','연결 복구 · 현장 작업표 자동 갱신 중');}
   paint();
 });
 $('pause').addEventListener('click',()=>{paused=!paused;paint();});
 $('reset').addEventListener('click',()=>{
   sim=new Warehouse();
   paused=prefersReducedMotion;
-  set('backup-result','현장 작업표 미전송');
+  set('backup-result','현장 작업표 자동 갱신 중');
   paint();
 });
 canvas.addEventListener('click',event=>{
@@ -135,6 +137,7 @@ canvas.addEventListener('click',event=>{
 let previous=performance.now();
 function animate(now){
   const wall=Date.now();
+  sim.maintainBackup(wall);
   sim.updateOutage(wall);
   if(!paused)sim.tick(Math.min((now-previous)/1000,.06),wall);
   previous=now;

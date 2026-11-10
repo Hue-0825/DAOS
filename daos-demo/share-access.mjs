@@ -10,6 +10,13 @@ const shareMatch=(a,b)=>{
   for(let i=0;i<a.length;i++)mismatch|=a.charCodeAt(i)^b.charCodeAt(i);
   return mismatch===0;
 };
+async function validShareToken(token,env) {
+  if(typeof token!=='string'||!/^[a-f0-9]{64}$/.test(token))return false;
+  const hash=await shareHash(token);
+  if(shareMatch(hash,env.DAOS_SHARE_KEY_HASH))return true;
+  return Number(env.DAOS_GUEST_INVITE_UNTIL)>Math.floor(Date.now()/1000)
+    && shareMatch(hash,env.DAOS_GUEST_INVITE_HASH);
+}
 async function shareSignature(secret,user,expires){
   const key=await crypto.subtle.importKey('raw',shareEncoder.encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']);
   return shareHex(await crypto.subtle.sign('HMAC',key,shareEncoder.encode(JSON.stringify([user,expires]))));
@@ -67,7 +74,7 @@ async function shareRoute(request,env,root) {
   if(url.pathname==='/share'&&request.method==='POST'){
     if(request.headers.get('Origin')!==url.origin||!user)return shareJson({error:'먼저 ChatGPT 계정으로 로그인하세요.'},403);
     const token=(await request.text()).trim();
-    if(!/^[a-f0-9]{64}$/.test(token)||!shareMatch(await shareHash(token),env.DAOS_SHARE_KEY_HASH)){
+    if(!await validShareToken(token,env)){
       return shareJson({error:'공유 링크를 확인하거나 새 링크를 받아 주세요.'},403);
     }
     const expires=String(Math.floor(Date.now()/1000)+SHARE_LIFETIME);

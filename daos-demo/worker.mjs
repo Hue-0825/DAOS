@@ -443,10 +443,7 @@ export default {
       try{data=await request.json();}catch{return json({authorized:false},400);}
       const email=typeof data?.email==='string'?data.email.toLowerCase():null;
       const owner=Boolean(email && email===env.DAOS_SHARE_OWNER_EMAIL?.toLowerCase());
-      const token=data?.token;
-      const invited=typeof token==='string' && /^[a-f0-9]{64}$/.test(token) &&
-        shareMatch(await shareHash(token),env.DAOS_SHARE_KEY_HASH);
-      return json({authorized:owner||invited});
+      return json({authorized:owner||await validShareToken(data?.token,env)});
     }
     const portalSession=await ssoAuthorized(request,env,'central');
     const hostedSplit = Boolean(env.DAOS_SHOP_TOKEN);

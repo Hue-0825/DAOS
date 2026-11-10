@@ -69,6 +69,6 @@ DAOS/
 | 메인 서버 | [메인 관제센터](https://daos-dispatch-demo.ryker6365.chatgpt.site/central/) |
 | 지역 허브 | [지역 허브](https://daos-hub-demo.ryker6365.chatgpt.site/) |
 | 기사 앱 | [기사 앱 웹 화면](https://daos-phone-driver.ryker6365.chatgpt.site/driver/) |
-| 물류센터 | [로봇 관제실](https://daos-dispatch-demo.ryker6365.chatgpt.site/central/warehouse.html) |
+| 물류센터 | [로봇 관제실](https://daos-logistics.ryker6365.chatgpt.site/robot/) |
 
 처음 참여하는 분은 역할별 공유 링크로 로그인해 접속을 활성화해 주세요. 로봇 관제실은 메인 관제센터 권한을 사용합니다.

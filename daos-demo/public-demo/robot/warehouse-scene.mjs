@@ -1,4 +1,4 @@
-import {PARKING,RACKS,SIZE,STAGES} from './warehouse-engine.mjs?v=2';
+import {PARKING,RACKS,SIZE,STAGES} from './warehouse-engine.mjs?v=3';
 
 const W=1320,H=700;
 const project=(x,y,z=0)=>[540+(x-y)*20,69+(x+y)*10.7-z];
@@ -153,21 +153,18 @@ export function createScene(canvas){
       text(ctx,robot.id,sx,sy-22,top,9,'center');
     }
   }
-  const badges={
-    alert:['!','#ffd069','#422400',22],
-    backup:['DAOS','#a8f0c7','#143e2b',39],
-    stopped:['정지','#ffb5ac','#511f19',31],
-    waiting:['대기','#f6d38a','#3f2a10',31],
-  };
-  function drawStatus(robot,badge){
-    const [label,fill,ink,width]=badge;
+  function drawStatus(robot,phase,label){
     const [x,y]=project(...robot.position);
+    const width=label==='!'?23:Math.max(34,label.length*10+10);
+    const fill=phase==='alert'?'#ffd069':phase==='stopped'?'#ffc8c0':
+      phase==='waiting'||phase==='drained'||!robot.job?'#dce5ef':STAGES[robot.stage].color;
     ctx.fillStyle=fill;
     ctx.beginPath();
     ctx.roundRect(x-width/2,y-52,width,18,4);
     ctx.fill();
     polygon(ctx,[[x-4,y-35],[x+4,y-35],[x,y-29]],fill);
-    text(ctx,label,x,y-39,ink,label==='!'?15:10,'center');
+    text(ctx,label,x,y-39,'#142135',label==='!'?15:10,'center');
+
   }
   function draw(sim,selected){
     lastFrame=[sim,selected];
@@ -179,12 +176,19 @@ export function createScene(canvas){
         line(ctx,[robot.position,...robot.route].map(([x,y])=>project(x,y)),active?STAGES[robot.stage].color:'#73a0bb64',active?2:1,[4,5]);
       }
     }
-    const sorted=objects.concat(sim.robots.map(robot=>({depth:robot.position[0]+robot.position[1]+.2,draw:()=>drawRobot(robot,robot.id===selected)})))
+    const cargo=[...sim.buffers()].map(({point:[x,y],count,stage})=>({depth:x+y-.18,draw:target=>{
+      const [sx,sy]=project(x+.36,y-.27);
+      for(let i=0;i<Math.min(2,count);i++)prism(target,x+.19,y-.46,.43,.38,i*5,5,boxes[stage%boxes.length]);
+      if(count>1)text(target,String(count),sx+8,sy-7,'#fff2cc',10,'center');
+    }}));
+    const sorted=objects.concat(cargo,sim.robots.map(robot=>({depth:robot.position[0]+robot.position[1]+.2,draw:()=>drawRobot(robot,robot.id===selected)})))
       .sort((a,b)=>a.depth-b.depth);
     for(const object of sorted)object.draw(ctx);
     for(const label of signs)sign(ctx,...label);
-    const badge=badges[sim.offlinePhase()];
-    if(badge)for(const robot of sim.robots)drawStatus(robot,badge);
+    const phase=sim.offlinePhase()??'online';
+    for(const robot of sim.robots){
+      if(phase!=='online'||robot.id===selected)drawStatus(robot,phase,phase==='alert'?'!':sim.robotStatus(robot,phase));
+    }
   }
   function pick(event,robots){
     const rect=canvas.getBoundingClientRect();

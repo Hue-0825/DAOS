@@ -38,30 +38,6 @@ async function verify(key,purpose,email,token) {
 }
 const readCookie=request=>request.headers.get('Cookie')?.split(';').map(item=>item.trim())
   .find(item=>item.startsWith(cookieName+'='))?.slice(cookieName.length+1);
-const robotApi=new Map([['/api/central/warehouse','GET'],['/api/central/connection','POST']]);
-
-async function proxy(request,url,env) {
-  const method=robotApi.get(url.pathname);
-  if (request.method!==method) return json({error:'지원하지 않는 요청입니다.'},405);
-  let body;
-  if (method==='POST') {
-    if (request.headers.get('Origin')!==url.origin) return json({error:'이 화면에서만 연결을 변경할 수 있습니다.'},403);
-    try {
-      const item=await request.json();
-      if (typeof item?.online!=='boolean') throw Error('Invalid connection state');
-      body=JSON.stringify({online:item.online});
-    } catch {return json({error:'연결 상태를 확인해 주세요.'},400);}
-  }
-  const headers={'Content-Type':'application/json','X-DAOS-Robot-Key':env.DAOS_ROBOT_KEY};
-  if (env.DAOS_CENTRAL_ACCESS) headers['OAI-Sites-Authorization']=`Bearer ${env.DAOS_CENTRAL_ACCESS}`;
-  try {
-    const upstream=await fetch(new URL(url.pathname+url.search,central),
-      {method,body,headers,redirect:'manual',signal:AbortSignal.timeout(4500)});
-    if (!upstream.headers.get('Content-Type')?.includes('application/json')) throw Error('Invalid response');
-    return new Response(upstream.body,{status:upstream.status,headers:{...privateHeaders,'Content-Type':'application/json'}});
-  } catch {return json({error:'메인 서버에 연결할 수 없습니다.'},503);}
-}
-
 const destinations=new Map([
   ['central',central],
   ['shop','https://daos-shop-demo.ryker6365.chatgpt.site'],
@@ -160,7 +136,7 @@ export default {
     if (path==='/robot/activate') return page('메인 관제센터의 접근 권한을 확인하고 있습니다.',
       '<a href="/robot/">관제실로 돌아가기</a>','<script type="module" src="/robot/activate.mjs"></script>');
     if (path.startsWith('/robot/') && !['/robot/','/robot/index.html','/robot/session'].includes(path)) return asset(path,request);
-    if (!path.startsWith('/robot/') && !robotApi.has(path)) return asset(path==='/'?'/index.html':path,request);
+    if (!path.startsWith('/robot/')) return asset(path==='/'?'/index.html':path,request);
 
     if (path==='/robot/session') {
       if (!key || !email || request.method!=='POST' || request.headers.get('Origin')!==url.origin ||
@@ -171,10 +147,8 @@ export default {
       }});
     }
     if (portalSession || (key && email && await verify(key,'session',email,readCookie(request)))) {
-      if (robotApi.has(path)) return proxy(request,url,env);
       return asset('/robot/index.html',request,privateHeaders);
     }
-    if (robotApi.has(path)) return json({error:'로봇 관제실 접근 권한이 필요합니다.'},401);
     return email?
       page('메인 관제센터에 로그인한 계정의 접근 권한을 확인합니다.',`<a href="${central}/central/robot-access">메인 관제센터 권한 확인 →</a>`):
       page('메인 관제센터에 사용하는 ChatGPT 계정으로 로그인해 주세요.',

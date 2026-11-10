@@ -1,11 +1,11 @@
 export const SIZE = [32, 23];
 export const RACKS = [5,10,15].flatMap(y => [9,14,19].map(x => [x,y,3,2]));
 export const STAGES = [
-  {label:'하차', code:'UL', count:4, color:'#71e4fa', stations:[[2,4],[2,11],[2,18]], rule:'캐시에 있는 당일 작업의 상자를 하차하고 입고 버퍼에 인계합니다.'},
+  {label:'하차', code:'UL', count:4, color:'#71e4fa', stations:[[2,4],[2,11],[2,18]], rule:'하차한 상자를 입고 버퍼에 내려놓습니다. 버퍼가 차면 운반 로봇이 가져갈 때까지 기다립니다.'},
   {label:'운반', code:'AM', count:5, color:'#a4aaff', stations:[[6,4],[6,11],[6,18]], rule:'버퍼의 상자를 공유 통로로 운반합니다. 다른 로봇이 점유한 칸에는 진입하지 않습니다.'},
-  {label:'분류', code:'ST', count:4, color:'#dca7fc', stations:[[23,4],[23,11],[23,18]], rule:'저장된 주문의 배송 시간대에 맞춰 상자를 분류합니다.'},
-  {label:'출차 배정', code:'DP', count:3, color:'#ffd089', stations:[[27,3],[27,10],[27,17]], rule:'장애 전에 허브 배차가 확정된 상자만 가상 출차 대기열에 넣습니다.'},
-  {label:'상차', code:'LD', count:4, color:'#96ebbb', stations:[[30,5],[30,12],[30,19]], rule:'가상 출차 배정까지 마친 상자를 상차합니다. 실제 기사 앱의 배송 상태는 현장에서 관리합니다.'},
+  {label:'분류', code:'ST', count:4, color:'#dca7fc', stations:[[23,4],[23,11],[23,18]], rule:'운반 로봇이 넘긴 상자를 출고 도크별로 분류합니다.'},
+  {label:'출차 배정', code:'DP', count:3, color:'#ffd089', stations:[[27,3],[27,10],[27,17]], rule:'분류가 끝난 상자에 지정된 출고 도크를 확인하고 상차팀에 넘깁니다.'},
+  {label:'상차', code:'LD', count:4, color:'#96ebbb', stations:[[30,5],[30,12],[30,19]], rule:'출고 확인을 마친 상자만 분류 버퍼에서 받아 트럭에 싣습니다.'},
 ];
 const key = ([x,y]) => y * SIZE[0] + x;
 const nextCells = ([x,y]) => [[x+1,y],[x,y+1],[x-1,y],[x,y-1]].filter(([a,b]) => a>=0 && a<SIZE[0] && b>=0 && b<SIZE[1]);
@@ -14,7 +14,7 @@ export const PARKING = [
   [[1,2],[1,7],[1,14],[1,20]], [[5,2],[5,8],[5,15],[5,20],[8,20]],
   [[24,1],[24,7],[24,14],[24,21]], [[26,1],[26,8],[26,15]], [[29,1],[29,8],[29,15],[29,21]],
 ];
-export const timeSlot = time => time >= '18:00' ? 2 : time >= '12:00' ? 1 : time >= '06:00' ? 0 : -1;
+export const BATCH = 'A-01';
 
 function pathTo(start, end, blocked) {
   const target = key(end), origin = key(start);
@@ -41,16 +41,25 @@ export const OUTAGE_ALERT_MS = 2000;
 export class Warehouse {
   constructor() {
     this.jobs = new Map();
-    this.clock = null;
-    this.mode = 'connecting';
+    this.backup = new Set();
+    this.backupAt = null;
+    this.mode = 'online';
     this.daosEnabled = true;
     this.outageAt = null;
     this.reportedPhase = null;
-    this.epoch = null;
     this.events = [];
     this.pending = 0;
     this.synced = 0;
     this.resetFleet();
+    const opening = [[38,5],[5,0],[4,5],[3,2],[4,0]];
+    for (const [stage,[count,start]] of opening.entries()) {
+      for (let i=0; i<count; i++) {
+        const id=`${BATCH}-${String(this.jobs.size+1).padStart(2,'0')}`;
+        const position=(i+start)%9;
+        this.jobs.set(id,{id,stage,segment:position%3,lane:Math.floor(position/3),robot:null});
+      }
+    }
+    this.note('관제',`출고 배치 ${BATCH} · 상자 ${this.jobs.size}개, 진행 중인 공정부터 이어서 작업합니다.`);
   }
   resetFleet() {
     this.robots = STAGES.flatMap((role,stage) => Array.from({length:role.count},(_,n) => {
@@ -63,43 +72,35 @@ export class Warehouse {
     this.events.unshift({actor,text,local,at:new Date().toLocaleTimeString('ko-KR',{hour12:false})});
     this.events.length=Math.min(this.events.length,75);
   }
-  snapshot({online,clock,orders,resetRevision}) {
-    const previous = this.mode;
-    this.clock = clock;
-    if (this.epoch !== null && this.epoch !== resetRevision) {
-      this.jobs.clear();
-      this.pending = this.synced = 0;
-      this.events = [];
-      this.resetFleet();
-      this.note('관제','전체 시연 리셋을 반영했습니다.');
-    }
-    this.epoch = resetRevision;
-    if (!online) return this.disconnect();
-    const incoming = new Set(orders.map(order=>order.id));
-    for (const [id,job] of this.jobs) {
-      if (!incoming.has(id)) {
-        if (job.robot) job.withdrawn = true;
-        else this.jobs.delete(id);
-      }
-    }
-    const lanes = new Map();
-    for (const order of orders) {
-      const group = order.date + '/' + order.segment;
-      const lane = lanes.get(group) ?? 0;
-      lanes.set(group,lane+1);
-      const existing = this.jobs.get(order.id);
-      if (existing) {
-        existing.withdrawn = false;
-        existing.dispatch = order.dispatch;
-      } else this.jobs.set(order.id,{...order,stage:0,robot:null,lane:lane%3});
-    }
+  sendBackup(now=Date.now()) {
+    if (this.mode !== 'online') return false;
+    this.backup = new Set([...this.jobs.values()].filter(job=>job.stage<STAGES.length).map(job=>job.id));
+    this.backupAt = now;
+    this.note('백업',`현장 작업표 전송 완료 · 상자 ${this.backup.size}개`);
+    return true;
+  }
+  restore() {
+    if (this.mode !== 'offline') return;
     this.mode = 'online';
-    if (previous !== 'online') {
-      const count = this.pending;
-      this.synced += count;
-      this.pending = 0;
-      this.note('관제',count?`연결 복구 · 로컬 공정 기록 ${count}건을 화면에 합쳤습니다.`:'DAOS 메인 서버에서 작업표를 받았습니다.');
+    const count = this.pending;
+    this.synced += count;
+    this.pending = 0;
+    this.note('관제',`서버 복구 · 현장 공정 기록 ${count}건을 합쳐 정상 운전으로 복귀했습니다.`);
+  }
+  get backupRemaining() {
+    return [...this.backup].filter(id=>this.jobs.get(id).stage<STAGES.length).length;
+  }
+  buffers() {
+    const buffers=new Map();
+    for(const job of this.jobs.values()){
+      if(job.robot || job.stage===0 || job.stage>=STAGES.length)continue;
+      const point=job.stage===1?this.station(1,job):job.stage===2?this.transfer(job):this.station(2,job);
+      const id=key(point);
+      const buffer=buffers.get(id)??{point,count:0,stage:job.stage};
+      buffer.count++;
+      buffers.set(id,buffer);
     }
+    return buffers.values();
   }
   setDaos(enabled) {
     if (this.daosEnabled === enabled) return;
@@ -117,22 +118,26 @@ export class Warehouse {
     if (this.mode !== 'offline') return null;
     if (now - this.outageAt < OUTAGE_ALERT_MS) return 'alert';
     if (!this.daosEnabled) return 'stopped';
-    if ([...this.jobs.values()].some(job=>this.eligible(job))) return 'backup';
-    return 'waiting';
+    if (this.backupAt===null) return 'waiting';
+    if (this.backupRemaining || this.robots.some(robot=>key(robot.cell)!==key(robot.home))) return 'backup';
+    return 'drained';
   }
   updateOutage(now) {
     const phase = this.offlinePhase(now);
     const messages = {
       stopped:'DAOS OFF · 서버가 복구될 때까지 로봇 공정을 정지합니다.',
-      backup:'DAOS 가동 · 미리 저장한 당일 작업표로 로봇 운전을 이어갑니다.',
-      waiting:'DAOS 대기 · 지금 시작할 수 있는 백업 작업표가 없습니다.',
+      backup:'현장 자율운전 · 받은 작업표로 로봇 간 인계를 재개합니다.',
+      waiting:'작업표 미수신 · 로봇이 백업 작업표를 기다립니다.',
+      drained:'백업 작업표의 공정을 모두 마쳤습니다. 추가 물량을 기다립니다.',
     };
     if (phase === this.reportedPhase || !messages[phase]) return;
     this.reportedPhase = phase;
     this.note('관제',messages[phase]);
   }
-  eligible(job) {
-    return !job.withdrawn && job.date === this.clock?.date && job.segment <= timeSlot(this.clock.time);
+  canHandoff(job) {
+    if(job.stage>=3)return true;
+    const count=[...this.jobs.values()].filter(next=>next.segment===job.segment&&next.lane===job.lane&&next.stage===job.stage+1).length;
+    return count<2;
   }
   station(stage, job) {
     const [x,y] = STAGES[stage].stations[job.segment];
@@ -152,6 +157,15 @@ export class Warehouse {
     if (stage === 4) return this.station(2,job);
     return stage < 2 ? this.station(stage,job) : null;
   }
+  robotStatus(robot,phase) {
+    if (phase==='alert') return '장애 감지';
+    if (phase==='stopped') return '안전 정지';
+    if (phase==='waiting') return '작업표 대기';
+    if (phase==='drained') return '작업 완료';
+    if (!robot.job) return key(robot.cell)===key(robot.home)?'인계 대기':'복귀 중';
+    if (!robot.next && key(robot.cell)!==key(robot.target)) return '통행 대기';
+    return robot.fetching?'인수 중':`${STAGES[robot.stage].label} 중`;
+  }
   tick(dt,now=Date.now()) {
     if (this.mode !== 'online' && this.offlinePhase(now) !== 'backup') return;
     const occupied = new Set(this.robots.flatMap(robot => [key(robot.cell),...(robot.next?[key(robot.next)]:[])]));
@@ -159,7 +173,7 @@ export class Warehouse {
     for (const robot of this.robots) {
       if (!robot.job && !robot.next && key(robot.cell)===key(robot.home)) {
         for (const job of this.jobs.values()) {
-          if (job.robot || job.stage!==robot.stage || !this.eligible(job) || (robot.stage>=3&&job.dispatch==null)) continue;
+          if (job.robot || job.stage!==robot.stage || (!this.backup.has(job.id)&&this.mode==='offline') || !this.canHandoff(job)) continue;
           const pickup = this.pickupFor(robot.stage,job);
           const goal = this.goalFor(robot.stage,job);
           const stations = (pickup?[pickup,goal]:[goal]).map(key);
@@ -177,23 +191,17 @@ export class Warehouse {
       if (!robot.next && key(robot.cell) === key(robot.target) && robot.job) {
         const job = robot.job;
         robot.work += dt;
-        if (robot.work < 0.55 + Math.min(job.quantity,10)*0.07) continue;
+        if (robot.work < (robot.stage===3?1.25:.65)) continue;
         if (robot.fetching) {
           robot.fetching = false;
           robot.target = this.goalFor(robot.stage,job);
           robot.work = 0;
           continue;
         }
-        if (job.withdrawn) {
-          this.jobs.delete(job.id);
-        } else if (robot.stage >= 3 && job.dispatch == null) {
-          job.stage = 3;
-          this.note(robot.id,'허브 배차 변경 · 상자를 출차 대기로 되돌렸습니다.');
-        } else {
-          job.stage++;
-          robot.done++;
-          this.note(robot.id,`${job.product} ${job.quantity}개 · ${STAGES[robot.stage].label} 완료`,this.mode==='offline');
-        }
+        job.stage++;
+        robot.done++;
+        const next = STAGES[job.stage]?.label;
+        this.note(robot.id,`${job.id} · ${next?`${STAGES[robot.stage].label} 완료 → ${next} 인계`:'트럭 상차 완료'}`,this.mode==='offline');
         job.robot = null;
         robot.job = null;
         robot.target = robot.home;

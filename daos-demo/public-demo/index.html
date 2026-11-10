@@ -27,15 +27,15 @@
       <p class="access">통합 사이트에서 한 번 로그인한 뒤 아래 메뉴로 운영 화면을 열 수 있습니다. 처음 참여하는 운영자는 메인 관제센터 공유 링크로 권한을 한 번 확인해 주세요.</p>
     </section>
     <section class="section warehouse" id="warehouse" aria-labelledby="warehouse-title"><div>
-      <p class="eyebrow">02 / 물류 현장</p><h2 id="warehouse-title">허브 작업표로 움직이는 로봇 20대</h2><p class="lead">가상 물류센터에서 로봇이 선반과 다른 로봇을 피해 공유 통로를 오갑니다. 연결이 끊기면 미리 받은 작업표와 역할별 매뉴얼을 사용합니다.</p>
+      <p class="eyebrow">02 / 물류 현장</p><h2 id="warehouse-title">하나의 출고 배치를 처리하는 로봇 20대</h2><p class="lead">가상 물류센터에서 하차한 상자를 운반·분류·출차 배정·상차 로봇이 이어받습니다. 백업 작업표를 전송하면 연결을 끊은 뒤에도 같은 출고 배치를 처리할 수 있습니다.</p>
       <ul class="roles"><li>하차 4대</li><li>운반 5대</li><li>분류 4대</li><li>출차 배정 3대</li><li>상차 4대</li></ul>
     </div><a class="primary" href="/open/robot">로봇 관제실 열기 ↗</a></section>
     <section class="section" id="scenario" aria-labelledby="scenario-title"><p class="eyebrow">03 / 장애 시연</p><h2 id="scenario-title">작업표 준비부터 연결 복구까지</h2>
       <ol class="scenario">
         <li><strong>작업표 준비</strong><p>메인 관제센터에서 날짜와 시각을 맞추고, 지역 허브에서 시연할 주문을 배차 확정합니다.</p></li>
-        <li><strong>현장 시작</strong><p>로봇 관제실과 기사 앱에서 같은 시·도를 선택하고, 작업표가 들어왔는지 확인합니다.</p></li>
-        <li><strong>서버 연결 끊기</strong><p>메인 관제센터에서 연결을 끊습니다. 로봇 관제실에서 저장된 작업과 허브 배차 대기 건수를 확인합니다.</p></li>
-        <li><strong>연결 복구</strong><p>메인 관제센터에서 복구한 뒤, 기사 앱의 미동기화 건수와 로봇 관제실의 로컬 공정 기록을 확인합니다.</p></li>
+        <li><strong>현장 시작</strong><p>기사 앱에 배차한 시·도의 작업표가 들어왔는지 확인합니다. 로봇 시연은 별도 출고 배치로 진행합니다.</p></li>
+        <li><strong>서버 연결 끊기</strong><p>기사 시연은 메인 관제센터에서 연결을 끊습니다. 로봇 시연은 관제실에서 백업 작업표를 전송한 뒤 시연 서버 연결을 끊습니다.</p></li>
+        <li><strong>연결 복구</strong><p>각 시연의 연결을 복구한 뒤, 기사 앱의 미동기화 건수와 로봇 관제실의 공정 기록을 확인합니다.</p></li>
       </ol>
     </section>
   </main>

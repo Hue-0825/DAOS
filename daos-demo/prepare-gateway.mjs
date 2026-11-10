@@ -18,8 +18,8 @@ if(role==='hub'){
     assets[file]=await readFile(new URL(`driver/${file}`,import.meta.url),'utf8');
   }
 }
-const [gateway,share]=await Promise.all(['gateway-worker.mjs','share-access.mjs'].map(file=>readFile(new URL(file,import.meta.url),'utf8')));
-await writeFile(new URL('worker.mjs',destination),`const ROLE=${JSON.stringify(role)};\nconst ASSETS=${JSON.stringify(assets)};\n${share}\n${gateway}`);
+const [gateway,share,sso]=await Promise.all(['gateway-worker.mjs','share-access.mjs','portal-sso.mjs'].map(file=>readFile(new URL(file,import.meta.url),'utf8')));
+await writeFile(new URL('worker.mjs',destination),`const ROLE=${JSON.stringify(role)};\nconst ASSETS=${JSON.stringify(assets)};\n${share}\n${sso}\n${gateway}`);
 await writeFile(new URL('build.mjs',destination),[
   "import { mkdir, copyFile } from 'node:fs/promises';",
   "await mkdir('dist/server',{recursive:true});",

@@ -434,6 +434,21 @@ export default {
       return Response.redirect(new URL('/robot/',robotSite),302);
     }
     if (request.method === 'GET' && pathname === '/central/robot-access') return robotAccess(request,env);
+    const sessionRoute=await ssoRoute(request,env,'central','/central/');
+    if(sessionRoute)return sessionRoute;
+    if(pathname==='/api/central/portal-auth' && request.method==='POST'){
+      if(!env.DAOS_ROBOT_KEY || !shareMatch(request.headers.get('X-DAOS-Robot-Key'),env.DAOS_ROBOT_KEY))
+        return json({authorized:false},403);
+      let data;
+      try{data=await request.json();}catch{return json({authorized:false},400);}
+      const email=typeof data?.email==='string'?data.email.toLowerCase():null;
+      const owner=Boolean(email && email===env.DAOS_SHARE_OWNER_EMAIL?.toLowerCase());
+      const token=data?.token;
+      const invited=typeof token==='string' && /^[a-f0-9]{64}$/.test(token) &&
+        shareMatch(await shareHash(token),env.DAOS_SHARE_KEY_HASH);
+      return json({authorized:owner||invited});
+    }
+    const portalSession=await ssoAuthorized(request,env,'central');
     const hostedSplit = Boolean(env.DAOS_SHOP_TOKEN);
     const split = hostedSplit || Boolean(env.SERVICE_TOKEN);
     if(env.DAOS_SHARE_KEY_HASH){
@@ -446,8 +461,8 @@ export default {
         const shop = token === env.DAOS_SHOP_TOKEN && pathname.startsWith('/api/shop/');
         const hub = token === env.DAOS_HUB_TOKEN && pathname.startsWith('/api/hub/');
         const driver = token === env.DAOS_DRIVER_TOKEN && (pathname === '/api/driver' || pathname.startsWith('/api/driver/'));
-        const consoleView = Boolean(request.headers.get('oai-authenticated-user-id'))
-          && (!env.DAOS_SHARE_KEY_HASH || await shareAuthorized(request,env)) && (
+        const consoleView = (portalSession || (Boolean(request.headers.get('oai-authenticated-user-id'))
+          && (!env.DAOS_SHARE_KEY_HASH || await shareAuthorized(request,env)))) && (
           (['/api/central/orders','/api/central/warehouse'].includes(pathname) && request.method === 'GET') ||
           (['/api/central/reset','/api/central/release','/api/central/clock','/api/central/connection'].includes(pathname) && request.method === 'POST' && request.headers.get('Origin') === new URL(request.url).origin)
         );
@@ -468,7 +483,7 @@ export default {
         return json({ error:'서버에서 요청을 처리하지 못했습니다.' },500);
       }
     }
-    if(env.DAOS_SHARE_KEY_HASH && !await shareAuthorized(request,env))return shareResponse(null,303,{Location:'/share'});
+    if(env.DAOS_SHARE_KEY_HASH && !portalSession && !await shareAuthorized(request,env))return shareResponse(null,303,{Location:'/share'});
     if (hostedSplit && /^\/ops\/?$/.test(pathname) && env.DAOS_HUB_URL) return Response.redirect(env.DAOS_HUB_URL,302);
     if (hostedSplit && /^\/driver\/?$/.test(pathname) && env.DAOS_DRIVER_URL) return Response.redirect(new URL('/driver/',env.DAOS_DRIVER_URL),302);
     if (split && !['/','/central/'].includes(pathname) && !pathname.startsWith('/central/')) return new Response('Not found',{status:404});

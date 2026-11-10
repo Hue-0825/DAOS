@@ -8,7 +8,10 @@ function allowed(path) {
 export default {
   async fetch(request,env) {
     const url=new URL(request.url);
-    if(env.DAOS_SHARE_KEY_HASH){
+    const sessionRoute=await ssoRoute(request,env,ROLE,root);
+    if(sessionRoute)return sessionRoute;
+    const portalSession=await ssoAuthorized(request,env,ROLE);
+    if(env.DAOS_SHARE_KEY_HASH&&!portalSession){
       const shared=await shareRoute(request,env,root);
       if(shared)return shared;
       if(!await shareAuthorized(request,env))return url.pathname.startsWith('/api/')
@@ -17,7 +20,7 @@ export default {
     if(url.pathname.startsWith('/api/')){
       if(!allowed(url.pathname))return json({error:'요청을 찾을 수 없습니다.'},404);
       const origin=request.headers.get('Origin');
-      if(request.method==='POST' && origin && origin!==url.origin)return json({error:'다른 사이트에서 변경할 수 없습니다.'},403);
+      if(request.method==='POST' && (origin||portalSession) && origin!==url.origin)return json({error:'다른 사이트에서 변경할 수 없습니다.'},403);
       try{
         const body=request.method==='POST'?await request.text():undefined;
         if(body?.length>100000)return json({error:'요청 크기가 너무 큽니다.'},413);

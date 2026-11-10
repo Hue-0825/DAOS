@@ -56,7 +56,7 @@ function accessPage(message,actions) {
     <header class="topbar"><div class="shell bar"><a class="brand" href="/">DAOS <span>스마트 물류</span></a><span class="header-label">통합 로그인</span></div></header>
     <main class="shell login"><section class="card login-card" aria-labelledby="access-title"><p class="eyebrow">DAOS 통합 로그인</p>
     <h1 id="access-title">운영 웹 접속</h1><p class="lead" role="status">${message}</p><div class="actions">${actions}</div><p class="access"><a href="/">← 통합 사이트로 돌아가기</a></p></section></main></body></html>`,
-    {headers:{...privateHeaders,'Content-Type':'text/html; charset=utf-8',
+    {headers:{...privateHeaders,'Content-Type':'text/html; charset=utf-8','Referrer-Policy':'same-origin',
       'Content-Security-Policy':"default-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"}});
 }
 async function operatorAllowed(email,token,env) {

@@ -412,9 +412,28 @@ async function api(request, db, path) {
   return json({ error:'요청을 찾을 수 없습니다.' },404);
 }
 
+const robotSite = 'https://daos-logistics.ryker6365.chatgpt.site';
+async function robotAccess(request,env) {
+  const email=request.headers.get('oai-authenticated-user-email')?.toLowerCase();
+  if (email && env.DAOS_ROBOT_KEY && await shareAuthorized(request,env)) {
+    const expires=String(Math.floor(Date.now()/1000)+120);
+    const signature=await shareSignature(env.DAOS_ROBOT_KEY,`robot-launch:${email}`,expires);
+    return shareResponse(null,303,{Location:`${robotSite}/robot/activate#${expires}.${signature}`});
+  }
+  return shareResponse(`<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>DAOS 로봇 관제실 권한 확인</title><body style="font:16px system-ui;max-width:35rem;margin:10vh auto;padding:0 20px">
+    <h1>로봇 관제실 권한 확인</h1><p>메인 관제센터에 접속 권한이 있는 계정으로 계속합니다.</p>
+    <p><a href="/central/robot-access">권한 확인 계속하기</a> · <a href="/share">메인 관제센터 접속</a></p></body></html>`,200,
+    {'Content-Type':'text/html; charset=utf-8','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'"});
+}
+
 export default {
   async fetch(request, env) {
     const { pathname } = new URL(request.url);
+    if (request.method === 'GET' && pathname === '/central/warehouse.html') {
+      return Response.redirect(new URL('/robot/',robotSite),302);
+    }
+    if (request.method === 'GET' && pathname === '/central/robot-access') return robotAccess(request,env);
     const hostedSplit = Boolean(env.DAOS_SHOP_TOKEN);
     const split = hostedSplit || Boolean(env.SERVICE_TOKEN);
     if(env.DAOS_SHARE_KEY_HASH){
@@ -434,7 +453,10 @@ export default {
         );
         const seed = pathname === '/api/central/seed' && request.method === 'POST'
           && Boolean(env.DAOS_SEED_TOKEN) && token === env.DAOS_SEED_TOKEN;
-        if (!shop && !hub && !driver && !consoleView && !seed) return json({error:'서버 간 연결이 필요합니다.'},401);
+        const robot = Boolean(env.DAOS_ROBOT_KEY) && shareMatch(request.headers.get('X-DAOS-Robot-Key'),env.DAOS_ROBOT_KEY)
+          && ((pathname === '/api/central/warehouse' && request.method === 'GET')
+            || (pathname === '/api/central/connection' && request.method === 'POST' && !request.headers.has('Origin')));
+        if (!shop && !hub && !driver && !consoleView && !seed && !robot) return json({error:'서버 간 연결이 필요합니다.'},401);
       } else if (env.SERVICE_TOKEN && request.headers.get('Authorization') !== `Bearer ${env.SERVICE_TOKEN}`) {
         return json({error:'서버 간 연결이 필요합니다.'},401);
       }

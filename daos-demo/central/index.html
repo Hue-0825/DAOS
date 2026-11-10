@@ -1,7 +1,18 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DAOS 메인 서버</title><link rel="stylesheet" href="style.css?v=22"><script type="module" src="central.mjs?v=22"></script></head>
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DAOS 메인 서버</title><link rel="stylesheet" href="style.css?v=23"><script type="module" src="central.mjs?v=22"></script></head>
 <body><header><strong>DAOS 메인 서버</strong><span id="server-state" class="server-state" role="status">서버 확인 중</span></header><main>
-<div class="intro"><h1>메인 관제센터</h1><p><a href="warehouse.html" target="_blank" rel="noopener">물류센터 로봇 관제실 ↗</a></p></div>
-<section class="card reset-panel" aria-label="서버 연결 제어"><strong>기사 작업 서버 연결</strong><button id="connection-toggle" type="button" disabled>서버 연결 끊기</button><p id="connection-result" role="status"></p></section>
+<div class="intro"><h1>메인 관제센터</h1></div>
+<nav class="card service-nav" aria-label="DAOS 운영 웹">
+  <strong>DAOS 운영 웹</strong>
+  <div>
+    <a href="./" aria-current="page">메인 관제센터</a>
+    <a href="https://daos-shop-demo.ryker6365.chatgpt.site/" target="_blank" rel="noopener">스토어 ↗</a>
+    <a href="https://daos-hub-demo.ryker6365.chatgpt.site/" target="_blank" rel="noopener">지역 허브 ↗</a>
+    <a href="https://daos-phone-driver.ryker6365.chatgpt.site/driver/" target="_blank" rel="noopener">기사 앱 ↗</a>
+    <a href="https://daos-logistics.ryker6365.chatgpt.site/robot/" target="_blank" rel="noopener">로봇 관제실 ↗</a>
+    <a href="https://daos-logistics.ryker6365.chatgpt.site/" target="_blank" rel="noopener">통합 사이트 ↗</a>
+  </div>
+</nav>
+<section class="card reset-panel" aria-label="서버 연결 제어"><strong>작업 서버 연결</strong><button id="connection-toggle" type="button" disabled>서버 연결 끊기</button><p id="connection-result" role="status"></p></section>
 <section class="card reset-panel" aria-label="전체 시연 초기화"><div><strong>전체 시연 초기화</strong><p>기본 주문 300건을 배차 대기로 되돌리고 모든 허브와 기사 앱의 배송 기록을 초기화합니다.</p></div><button id="reset-demo" type="button" disabled>전체 시연 리셋</button><p id="reset-result" role="status"></p></section>
 <details class="card clock-panel"><summary>시간 설정 <span id="shared-clock">시연 시간 확인 중</span></summary><form id="clock-form" class="toolbar"><label>시연 날짜<select id="clock-date" required></select></label><label>시연 시각<input id="clock-time" type="time" required></label><button id="clock-apply" type="submit" disabled>전체 화면에 적용</button></form><p id="clock-result" role="status"></p></details>
 <section class="card"><div class="tabs" aria-label="주문 보기"><button id="all" type="button" aria-pressed="true">모든 정보</button><button id="regional" type="button" aria-pressed="false">지역별 정리</button></div>

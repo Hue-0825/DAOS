@@ -1,6 +1,8 @@
-import { copyFile, mkdir, rm } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 
-await rm('dist', { recursive: true, force: true });
-await mkdir('dist', { recursive: true });
-await Promise.all(['index.html', 'style.css', 'robots.txt', 'sitemap.xml', 'robot.html']
-  .map(file => copyFile(file, 'dist/' + file)));
+const files = ['index.html','style.css','robots.txt','sitemap.xml',
+  ...(await readdir('robot')).map(file=>`robot/${file}`)];
+const assets = Object.fromEntries(await Promise.all(files.map(async file=>['/'+file,await readFile(file,'utf8')])));
+await rm('dist',{recursive:true,force:true});
+await mkdir('dist/server',{recursive:true});
+await writeFile('dist/server/index.js',`const ASSETS=${JSON.stringify(assets)};\n${await readFile('worker.mjs','utf8')}`);

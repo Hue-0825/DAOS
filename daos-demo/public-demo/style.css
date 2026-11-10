@@ -74,3 +74,6 @@ footer a{color:var(--accent);font-weight:750}
   .bar nav{gap:3px}
   .bar nav a{padding-inline:4px}
 }
+.legacy-access{width:100%;border-top:1px solid var(--line);padding-top:10px;margin-top:3px;font-size:13px;color:var(--muted)}
+.legacy-access summary{cursor:pointer}
+.legacy-access .access-form{margin-top:8px}

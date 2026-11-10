@@ -52,10 +52,10 @@ const sessionToken=(request,name)=>request.headers.get('Cookie')?.split(';').map
 function accessPage(message,actions) {
   return new Response(`<!doctype html><html lang="ko"><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1"><title>DAOS 통합 시연 로그인</title>
-    <link rel="stylesheet" href="/style.css?v=3"><body>
+    <link rel="stylesheet" href="/style.css?v=4"><body>
     <header class="topbar"><div class="shell bar"><a class="brand" href="/">DAOS <span>스마트 물류</span></a><span class="header-label">통합 로그인</span></div></header>
     <main class="shell login"><section class="card login-card" aria-labelledby="access-title"><p class="eyebrow">DAOS 통합 로그인</p>
-    <h1 id="access-title">운영 웹 접속</h1><p class="lead">${message}</p><div class="actions">${actions}</div><p class="access"><a href="/">← 통합 사이트로 돌아가기</a></p></section></main></body></html>`,
+    <h1 id="access-title">운영 웹 접속</h1><p class="lead" role="status">${message}</p><div class="actions">${actions}</div><p class="access"><a href="/">← 통합 사이트로 돌아가기</a></p></section></main></body></html>`,
     {headers:{...privateHeaders,'Content-Type':'text/html; charset=utf-8',
       'Content-Security-Policy':"default-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"}});
 }
@@ -82,11 +82,12 @@ async function portalAccess(request,url,env,user,email,key) {
   const next=url.searchParams.get('next');
   const dest=destinations.has(next)||next==='robot'?'/open/'+next:'/';
   const returnPath=dest==='/'?'/access':'/access?next='+next;
+  const afterLogin=request.method==='POST'?'/#systems':dest;
   if(!user||!key){
     return accessPage('ChatGPT로 한 번 로그인한 뒤 통합 사이트 메뉴에서 모든 운영 화면을 열 수 있습니다.',
       `<a class="primary" href="/signin-with-chatgpt?return_to=${encodeURIComponent(returnPath)}" target="_top">ChatGPT로 로그인</a>`);
   }
-  if(await verify(key,'portal',user,sessionToken(request,portalCookie)))return redirect(dest);
+  if(await verify(key,'portal',user,sessionToken(request,portalCookie)))return redirect(afterLogin);
   let value='';
   if(request.method==='POST'){
     if(request.headers.get('Origin')!==url.origin)return json({error:'잘못된 요청입니다.'},403);
@@ -94,16 +95,25 @@ async function portalAccess(request,url,env,user,email,key) {
     value=(fields.get('access')??fields.get('share')??'').trim();
   }
   const passwordAccepted=Boolean(env.DAOS_DEMO_PASSWORD && value===env.DAOS_DEMO_PASSWORD);
-  const allowed=passwordAccepted||await operatorAllowed(email,shareCode(value),env);
+  const token=shareCode(value);
+  const shouldCheckOwner=request.method==='GET'||Boolean(token);
+  const allowed=passwordAccepted||(shouldCheckOwner&&await operatorAllowed(email,token,env));
   if(allowed){
     const session=await signed(key,'portal',user,String(Math.floor(Date.now()/1000)+portalLifetime));
-    return redirect(dest,{'Set-Cookie':`${portalCookie}=${session}; Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age=${portalLifetime}`});
+    return redirect(afterLogin,{'Set-Cookie':`${portalCookie}=${session}; Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age=${portalLifetime}`});
   }
-  const prompt=allowed===null?'지금은 메인 서버에서 권한을 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.':
-    request.method==='POST'?'시연 비밀번호를 다시 확인해 주세요.':'시연 비밀번호를 한 번 입력하면 모든 운영 웹을 열 수 있습니다.';
+  const prompt=request.method==='GET'?'시연 비밀번호를 한 번 입력하면 모든 운영 웹을 열 수 있습니다.':
+    allowed===null?'공유 링크를 확인할 수 없습니다. 시연 비밀번호로 다시 시도해 주세요.':
+    '입력값을 다시 확인해 주세요.';
   return accessPage(prompt,`<form class="access-form" method="post" action="${returnPath}">
-    <label for="access">시연 비밀번호</label><input id="access" name="access" type="password" autocomplete="off" autocapitalize="none" maxlength="300" required>
-    <button class="primary" type="submit">운영 웹 열기</button><small>기존 공유 링크도 이 칸에 입력할 수 있습니다.</small></form>`);
+    <label for="access">시연 비밀번호</label><input id="access" name="access" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="32" required>
+    <button class="primary" type="submit">운영 웹 열기</button></form>
+    <details class="legacy-access"><summary>기존 공유 링크로 열기</summary>
+      <form class="access-form" method="post" action="${returnPath}">
+        <label for="share">메인 관제센터 공유 링크</label><input id="share" name="share" type="password" autocomplete="off" maxlength="300" required>
+        <button class="secondary" type="submit">공유 링크 확인</button>
+      </form>
+    </details>`);
 }
 async function roleGrant(secret,role) {
   const expires=String(Math.floor(Date.now()/1000)+90),nonce=crypto.randomUUID();

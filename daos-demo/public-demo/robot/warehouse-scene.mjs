@@ -1,4 +1,4 @@
-import {PARKING,RACKS,SIZE,STAGES} from './warehouse-engine.mjs?v=5';
+import {PARKING,RACKS,SIZE,STAGES} from './warehouse-engine.mjs?v=6';
 
 const W=1320,H=700;
 const project=(x,y,z=0)=>[540+(x-y)*20,69+(x+y)*10.7-z];
@@ -143,14 +143,47 @@ export function createScene(canvas){
       ctx.beginPath();ctx.ellipse(sx,sy+2,15,7,0,0,Math.PI*2);
       ctx.strokeStyle=top;ctx.lineWidth=1.5;ctx.stroke();
     }
-    prism(ctx,x-.32,y-.32,.64,.64,1,robot.stage===0||robot.stage===4?11:8,[top,left,right]);
-    prism(ctx,x-.16,y-.12,.32,.25,9,3,['#142a3d','#203950','#203950']);
-    if(robot.job && !robot.fetching && robot.stage!==3)prism(ctx,x-.20,y-.22,.42,.42,12,7,boxes[robot.stage%boxes.length]);
+    const body=[top,left,right],dark=['#23445b','#152636','#1a3446'];
+    let deck=9;
+    switch(robot.stage){
+      case 0:
+        prism(ctx,x-.37,y-.27,.51,.54,1,8,body);
+        prism(ctx,x-.17,y-.26,.12,.52,8,10,dark);
+        prism(ctx,x-.06,y-.22,.61,.12,2,3,body);
+        prism(ctx,x-.06,y+.10,.61,.12,2,3,body);
+        deck=5;
+        break;
+      case 1:
+        prism(ctx,x-.42,y-.35,.84,.70,1,5,body);
+        prism(ctx,x-.36,y-.31,.72,.62,6,2,dark);
+        deck=8;
+        break;
+      case 2:
+        prism(ctx,x-.34,y-.35,.68,.70,1,6,body);
+        prism(ctx,x-.31,y-.30,.12,.14,7,12,dark);
+        prism(ctx,x-.31,y+.16,.12,.14,7,12,dark);
+        prism(ctx,x-.34,y-.35,.23,.70,19,4,body);
+        deck=7;
+        break;
+      case 3:
+        prism(ctx,x-.26,y-.30,.52,.60,1,6,body);
+        prism(ctx,x-.10,y-.11,.20,.22,7,11,dark);
+        prism(ctx,x-.25,y-.27,.50,.54,18,4,body);
+        prism(ctx,x-.17,y-.16,.31,.32,22,1,dark);
+        break;
+      case 4:
+        prism(ctx,x-.39,y-.37,.78,.74,1,5,body);
+        prism(ctx,x-.27,y-.25,.54,.50,6,7,dark);
+        prism(ctx,x-.34,y-.33,.68,.66,13,4,body);
+        deck=17;
+        break;
+    }
+    if(robot.job && !robot.fetching && robot.stage!==3)prism(ctx,x-.18,y-.19,.36,.38,deck,6,boxes[robot.stage%boxes.length]);
     if(active||robot.job){
       const w=43;
       ctx.fillStyle='#0a1628';
-      ctx.fillRect(sx-w/2,sy-32,w,14);
-      text(ctx,robot.id,sx,sy-22,top,9,'center');
+      ctx.fillRect(sx-w/2,sy-36,w,13);
+      text(ctx,robot.id,sx,sy-27,top,9,'center');
     }
   }
   function drawStatus(robot,phase,label){

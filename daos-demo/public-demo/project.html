@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DAOS 프로젝트 소개 및 기술 검증</title>
 <meta name="description" content="DAOS의 주문·배차·배송·로봇 시연, 단절 운영과 복구 검증 원리, 논문과 표준 검토 결과를 설명합니다.">
-<link rel="stylesheet" href="/style.css?v=6">
+<link rel="stylesheet" href="/style.css?v=7">
 </head>
 <body>
-<header class="topbar"><div class="shell bar"><a class="brand" href="/">DAOS <span>스마트 물류</span></a><nav aria-label="프로젝트 메뉴"><a href="#flow">작동 방식</a><a href="#evidence">기술 검증</a><a href="#test">실험과 비용</a><a href="/#systems">시연 열기 ↗</a></nav></div></header>
+<header class="topbar"><div class="shell bar"><a class="brand" href="/">DAOS <span>스마트 물류</span></a><nav aria-label="프로젝트 메뉴"><a href="#flow">작동 방식</a><a href="#architecture">3계층 구조</a><a href="#evidence">기술 검증</a><a href="#test">실험과 비용</a><a href="/#systems">시연 열기 ↗</a></nav></div></header>
 <main class="shell project">
 <section class="hero" aria-labelledby="project-title">
   <div><p class="eyebrow">프로젝트 소개 · 기술 검증</p><h1 id="project-title">DAOS 분산 자율운영 시스템</h1>
@@ -27,10 +27,44 @@
     <p>로봇 20대가 상자 54개를 하차하고, 운반·분류를 거쳐 트럭에 싣습니다.</p>
     <ul class="reading-list">
       <li><strong>정상 운전</strong> 선행 공정이 끝났는지, 이동할 칸이 비어 있는지 확인합니다.</li>
-      <li><strong>연결 끊김</strong> 경고가 표시되는 동안에도 자동 저장된 작업표로 운행을 이어갑니다. 시연에서 작업표의 유효시간은 마지막 갱신부터 45초입니다.</li>
+      <li><strong>연결 끊김</strong> 약 1초간 대기하며 운전을 전환합니다. DAOS가 켜져 있고 백업이 유효하면 운행을 재개합니다.</li>
       <li><strong>연결 복구</strong> 장애 직전의 중앙 기록, 현장 인계 기록, 가상 스캔을 대조합니다. 기록이 다르면 해당 상자를 보류합니다.</li>
     </ul>
     <div class="actions"><a class="secondary" href="/open/robot">로봇 관제실 열기 ↗</a></div>
+  </div>
+</section>
+<section class="section" id="architecture">
+  <p class="eyebrow">보고서 2.2 · 그림 1</p><h2>DAOS 3계층 구조</h2>
+  <p class="section-intro">중앙이 작업과 권한을 먼저 내려보냅니다. 장애 중에는 엣지와 로봇이 승인된 범위에서 일하고, 복구 뒤에는 기록을 다시 중앙으로 올립니다.</p>
+  <ol class="architecture">
+    <li><h3>01 중앙</h3>
+      <ul class="reading-list">
+        <li><strong>WMS · FMS/MCS</strong> 주문과 재고를 작업으로 바꾸고 로봇을 배정하며 경로를 계획합니다.</li>
+        <li><strong>점유권 위임 관리자</strong> 작업과 공유 자원에 접근할 권한을 로봇별로 미리 발급합니다. 각 권한에는 만료시간과 운전 세대가 붙습니다.</li>
+        <li><strong>복구 대조 엔진</strong> 서버 기록, 로봇·엣지 로그, 실물 위치 증거를 확인해 상태를 확정하고 새 운전 세대를 발급합니다.</li>
+      </ul>
+    </li>
+    <li><h3>02 구역 엣지</h3>
+      <ul class="reading-list">
+        <li><strong>구역 게이트웨이</strong> 보고서는 소형 PC에서 MQTT 중계, 로그 복제, 시각 동기화를 맡기는 구조를 제안합니다.</li>
+        <li><strong>실물 위치 증거</strong> 로봇 하부 카메라로 랙·바닥 코드를 읽고, 필요한 경우 작업자가 PDA로 확인합니다.</li>
+      </ul>
+    </li>
+    <li><h3>03 로봇</h3>
+      <ul class="reading-list">
+        <li><strong>실행 판단</strong> 선행 공정이 끝났는지, 사용할 자원과 권한의 유효시간이 충분한지 확인합니다. 보고서에서는 이 판단에 작업 의존성·자원 그래프(DRG)를 사용합니다.</li>
+        <li><strong>로컬 로그와 협상</strong> 작업 결과를 기기에 기록합니다. 추가 점유가 필요하면 같은 구역에서 이웃 로봇과 조정합니다.</li>
+      </ul>
+    </li>
+  </ol>
+  <div class="card project-block"><h3>현재 웹에서 볼 수 있는 동작</h3>
+    <ul class="reading-list">
+      <li><strong>정상</strong> 중앙 역할이 로봇별 공정과 구역 권한을 발급합니다. 시연에서 권한 유효시간은 마지막 갱신부터 45초입니다.</li>
+      <li><strong>장애</strong> 약 1초 동안 전환을 확인합니다. 로봇이 다음 공정과 권한을 확인하면 입고·공유 통로·출고 엣지가 이동 칸을 예약합니다.</li>
+      <li><strong>복구</strong> 중앙은 장애 직전 상태, 로봇 로그와 엣지 복제본, 가상 위치 증거를 대조합니다. 대조 뒤 새 운전 세대를 발급합니다.</li>
+    </ul>
+    <p>세 계층은 한 브라우저에서 시연합니다. 실제 MQTT 브로커, 로봇 간 직접 통신, 시각 동기화와 카메라·PDA 스캔은 현장 실증 범위입니다.</p>
+    <p class="source-links"><a href="https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html">MQTT 공식 규격</a> · <a href="https://www.iso.org/standard/83545.html">무인 산업차량 안전 요구사항</a></p>
   </div>
 </section>
 <section class="section" id="evidence"><p class="eyebrow">02 / 원문 교차 검증</p><h2>기술 근거와 DAOS 적용 범위</h2>
@@ -126,19 +160,33 @@
   <ol class="scenario">
    <li><strong>기준선</strong><p>주문, 로봇 배치, 장애 시점을 맞춰 DAOS OFF와 ON을 비교합니다.</p></li>
    <li><strong>기사 앱</strong><p>배송을 기록한 뒤 다시 연결합니다. 재전송, 작업 순서 위반, 이전 배차 버전을 시험합니다.</p></li>
-   <li><strong>로봇 관제실</strong><p>연결을 끊는 순간에도 DAOS로 운행이 이어지는지 확인합니다. 백업이 만료됐거나 스캔 기록이 다를 때는 정지와 보류를 확인합니다.</p></li>
+   <li><strong>로봇 관제실</strong><p>연결을 끊고 약 1초 뒤 자율운전이 시작되는지 확인합니다. 백업 작업표의 만료와 복구 대조 결과도 확인합니다.</p></li>
    <li><strong>계측</strong><p>장애 중 처리량과 정상화 시간을 비교합니다. 중복·누락, 보류, 통로 충돌 건수도 기록합니다.</p></li>
   </ol>
   <div class="card project-block">
-    <h3>비용과 처리량 예시</h3>
-    <p>시간당 2,000라인을 처리하는 센터에서 30분 동안 장애가 났다고 가정한 계산입니다. 장애 후 정상화 시간은 기존 40분, DAOS 적용 시 5분으로 두었습니다.</p>
+    <h3>30분 장애 한 번에 약 129만 원의 직접 손실 감소</h3>
+    <p>보고서 6장의 시나리오입니다. 센터는 시간당 2,000라인을 처리합니다. 기존 방식은 장애 중 0%, 복구 중 40%를 처리한다고 가정했습니다. DAOS는 장애 중 60%, 본문 표의 복구 구간에서는 70%를 적용했습니다.</p>
     <dl class="reading-metrics">
-      <div><dt>장애 1회당 예상 처리 손실</dt><dd>1,800 → 450라인</dd></div>
-      <div><dt>예상 손실 감소율</dt><dd>75%</dd></div>
-      <div><dt>연 6회 장애 시 직접 절감 추정</dt><dd>약 776.5만 원</dd></div>
+      <div><dt>장애 1회 처리 손실</dt><dd>1,800 → 450라인</dd></div>
+      <div><dt>긴급 대응비 절감</dt><dd>121.5만 원</dd></div>
+      <div><dt>수동 복구 인건비 절감</dt><dd>약 7.9만 원</dd></div>
     </dl>
-    <p>절감액에는 긴급 대응비와 인건비를 반영했습니다. 손익분기점을 계산하려면 구축비와 연간 운영비를 추가해야 합니다.</p>
-    <p><strong>장애가 2시간 이어지면</strong> 초반 처리율 60%를 30분 유지할 때 예상 손실은 2,550라인입니다. 5분만 유지하면 약 2,800라인으로 늘어납니다. 이후 처리율은 두 경우 모두 30%로 가정했습니다.</p>
+    <ul class="reading-list">
+      <li><strong>긴급 대응비</strong> 줄어든 1,350라인 × 긴급 대응 비율 30% × 라인당 3,000원입니다.</li>
+      <li><strong>인건비</strong> 기존 5명 × 40분에서 DAOS 적용 시 1명 × 10분을 빼고, 시간당 25,000원을 적용했습니다.</li>
+      <li><strong>그림 3을 적용하면</strong> 그림은 DAOS 복구 구간을 30%로 그렸습니다. 이 경우 약 517라인을 잃고, 직접 손실 감소액은 약 123.4만 원입니다.</li>
+    </ul>
+  </div>
+  <div class="card project-block">
+    <h3>예상 운영비 월 약 2.3만 원</h3>
+    <p>보고서 5.4의 엣지 장비 2대 기준입니다. 중앙 VM 상한과 별도 전력 가정을 합산했습니다.</p>
+    <dl class="reading-metrics">
+      <div><dt>초기 장비 구입</dt><dd>약 40만 원</dd></div>
+      <div><dt>중앙 VM</dt><dd>월 2만 원 이하</dd></div>
+      <div><dt>전력 포함 예시</dt><dd>연 약 27.5만 원</dd></div>
+    </dl>
+    <p>엣지 2대를 각각 10W로 24시간 가동하고 전력 단가를 200원/kWh로 가정하면 전력비는 연 약 3.5만 원입니다. 개발·연동, 유지보수, 인력, 네트워크 비용은 별도 견적이 필요합니다.</p>
+    <p>본문 표 기준으로 연 6회 장애가 나면 운영비 차감 전 직접 절감 추정액은 약 776.5만 원입니다. 2시간 장애에서 초반 처리율 60%를 30분 유지하면 예상 손실은 2,550라인, 5분 유지하면 약 2,800라인입니다. 이후 처리율은 두 경우 모두 30%로 가정했습니다.</p>
   </div>
 </section>
 </main>

@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
   <title>DAOS 물류센터 로봇 관제실</title>
-  <link rel="stylesheet" href="warehouse.css?v=5">
-  <script type="module" src="warehouse-view.mjs?v=5"></script>
+  <link rel="stylesheet" href="warehouse.css?v=6">
+  <script type="module" src="warehouse-view.mjs?v=6"></script>
 </head>
 <body>
   <header class="topbar"><a class="wordmark" href="https://daos-logistics.ryker6365.chatgpt.site/"><b>DAOS</b><span> / 통합 사이트</span></a><div class="top-actions"><a href="https://daos-dispatch-demo.ryker6365.chatgpt.site/central/" target="_blank" rel="noopener">메인 관제센터 ↗</a><span id="mode" class="server-state" role="status">시연 서버 연결됨</span></div></header>
@@ -21,7 +21,6 @@
         <button id="daos-switch" type="button" role="switch" aria-label="DAOS 백업 운전" aria-checked="true"><span>DAOS</span><strong id="daos-value">ON</strong></button>
         <button id="connection" class="danger" type="button">서버 연결 끊기</button>
       </div>
-      <button id="scan-mismatch" type="button" hidden>스캔 불일치 재현</button>
       <p id="audit-result" class="backup-result" role="status" hidden></p>
       <p id="backup-result" class="backup-result" role="status">현장 작업표 자동 갱신 중</p>
     </section>
@@ -36,6 +35,14 @@
       <div><span>현장 백업 작업표</span><strong id="backup">미전송</strong></div>
       <div><span>상차 완료</span><strong id="completed">0건</strong></div>
       <div><span>로컬 공정 기록</span><strong id="pending">0건</strong></div>
+    </section>
+    <section class="panel layer-panel" aria-labelledby="layer-title">
+      <div class="panel-head"><div><p class="kicker">보고서 2.2 적용 · 브라우저 시연</p><h2 id="layer-title">중앙 · 구역 엣지 · 로봇</h2></div><a href="/project.html#architecture">시스템 구조 보기 ↗</a></div>
+      <div class="layer-grid">
+        <article><h3>01 중앙</h3><p>작업·구역 권한 발급 / 복구 대조</p><strong id="central-layer"></strong></article>
+        <article><h3>02 구역 엣지</h3><p>이동 칸 점유 조정 / 현장 로그 복제</p><ul id="edge-layer" class="layer-zones"></ul></article>
+        <article><h3>03 로봇</h3><p>선행 공정·점유권 확인 / 로컬 실행</p><strong id="robot-layer"></strong></article>
+      </div>
     </section>
     <section class="panel map-panel" aria-labelledby="floor-title">
       <div class="panel-head"><div><p class="kicker">공유 통로 · 작업대 15곳</p><h2 id="floor-title">물류센터 배치도</h2></div><span id="active" class="time">이동 및 작업 0 / 20대</span></div>

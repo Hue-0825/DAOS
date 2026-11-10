@@ -113,3 +113,8 @@ footer a{color:var(--accent);font-weight:750}
   .evidence-links{grid-column:auto}
   .reading-metrics{grid-template-columns:1fr}
 }
+.architecture{list-style:none;padding:0;display:grid;gap:10px}
+.architecture>li{border:1px solid var(--line);border-left:4px solid #4879b7;border-radius:12px;background:#f4f8ff;padding:14px 16px}
+.architecture>li:nth-child(2){border-left-color:#63874e;background:#f3f8ef}
+.architecture>li:nth-child(3){border-left-color:#b86b32;background:#fff7ef}
+.architecture h3{font-size:17px;margin-bottom:6px}

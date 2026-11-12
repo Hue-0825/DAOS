@@ -1,10 +1,17 @@
-import {BATCH,STAGES,Warehouse,BACKUP_LIFETIME_MS} from './warehouse-engine.mjs?v=26';
-import {createScene} from './warehouse-scene.mjs?v=29';
+import {BATCH,STAGES,Warehouse,BACKUP_LIFETIME_MS} from './warehouse-engine.mjs?v=27';
+import {createScene} from './warehouse-scene.mjs?v=30';
 
 const $=id=>document.getElementById(id);
 const canvas=$('warehouse');
 const scene=createScene(canvas);
-let sim=new Warehouse(Date.now(),{compact:true});
+const dropChance=$('drop-chance');
+function createRun(){
+  const chance=Math.min(100,Math.max(0,Math.round(dropChance.valueAsNumber||0)));
+  dropChance.value=chance;
+  $('drop-applied').textContent=`이번 회차 ${chance}%`;
+  return new Warehouse(Date.now(),{compact:true,dropChance:chance});
+}
+let sim=createRun();
 let selected='UL-01';
 const prefersReducedMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
 let paused=prefersReducedMotion;
@@ -63,7 +70,7 @@ const stages=STAGES.map(role=>{
 
 const modes={online:'정상 운전',outage:'장애·대기',backup:'DAOS 운전',recovering:'복구 전환'};
 const modeColors={online:'var(--timeline-online)',outage:'var(--timeline-outage)',backup:'var(--timeline-backup)',recovering:'var(--timeline-recovering)'};
-const TIMELINE_REFERENCE_MS=60_000;
+const TIMELINE_REFERENCE_MS=120_000;
 const EMPTY_ARC_COLOR='#e6e3ef';
 let timelineFinishedAt=null;
 let pausedAt=paused?sim.startedAt:null;
@@ -141,7 +148,7 @@ function paintOverview(finished,total){
   timeline.title=summary;
 }
 
-const positionNames={station:'작업대',conveyor:'컨베이어',robot:'운반 로봇',arm:'로봇팔',shipped:'상차 완료'};
+const positionNames={station:'작업대',conveyor:'컨베이어',robot:'운반 로봇',floor:'낙하 지점 · 바닥',arm:'로봇팔',shipped:'상차 완료'};
 const stageName=stage=>STAGES[stage]?.label??'상차 완료';
 let renderedComparison;
 
@@ -183,7 +190,9 @@ function paintPositionComparison(){
     cell(describePosition(central));
     cell(...(logs.length?logs.map(log=>`${log.node} #${log.sequence} · (${log.location}) · ${log.edge} ${log.replicated?'복제 확인':'복제 누락·불일치'}`):['장애 중 완료 로그 없음']));
     const scan=position.scan?.location;
-    cell(describePosition(position),scan==='SCAN-MISMATCH'?'스캔 위치 불일치':scan?`마지막 스캔 지점 (${scan})`:'스캔 좌표 기록 없음');
+    const incidentScan=position.incidentScan?.location;
+    const scanLabel=scan==='SCAN-MISMATCH'?'스캔 위치 불일치':scan?`마지막 공정 스캔 (${scan})`:'공정 스캔 좌표 기록 없음';
+    cell(describePosition(position),incidentScan?`현장 재스캔 (${incidentScan})`:scanLabel);
     const outcome=cell({held:'확인 보류',matched:'일치 · 운전 재개',unchanged:'변경 없음'}[result],reason);
     outcome.dataset.result=result;
     return row;
@@ -207,6 +216,22 @@ function paint(){
     :phase==='recovering'?recoveryStatus[sim.recoveryPhase]:INCIDENTS[phase];
   const jobs=[...sim.jobs.values()],finished=jobs.filter(job=>job.stage===STAGES.length&&!job.auditHold).length;
   paintOverview(finished,jobs.length);
+  const drop=sim.dropIncident;
+  const dropLabels={
+    isolated:['AM 박스 낙하 · 통행 제한','해당 로봇은 정지하고 주변 로봇은 낙하 칸을 피합니다.'],
+    inspection:['현장 확인 · 재스캔','담당자가 모의 점검을 하고 재적재 전 상자 코드·수량·도크를 확인합니다.'],
+    held:['확인 보류 · 격리 유지','대조 결과가 일치하지 않아 해당 상자와 낙하 구역을 보류합니다.'],
+    resumed:['낙하 대응 완료 · 운반 재개','재스캔 일치와 담당자 모의 승인 후 같은 상자의 운반을 이어갑니다.'],
+  };
+  const dropStatus=$('drop-status');
+  dropStatus.hidden=!drop;
+  if(drop&&dropStatus.dataset.phase!==drop.phase){
+    dropStatus.dataset.phase=drop.phase;
+    const [heading,detail]=dropLabels[drop.phase];
+    set('drop-title',heading);
+    set('drop-detail',`${drop.robotId} · ${drop.taskId} · (${drop.point.join(', ')}) — ${detail}`);
+  }
+  if(!drop)delete dropStatus.dataset.phase;
   paintPositionComparison();
   const connection=$('connection');
   $('mode').dataset.mode=sim.mode;
@@ -445,7 +470,7 @@ $('pause').addEventListener('click',()=>{
   paint();
 });
 $('reset').addEventListener('click',()=>{
-  sim=new Warehouse(Date.now(),{compact:true});
+  sim=createRun();
   paused=prefersReducedMotion;
   pausedDuration=0;
   pausedAt=paused?sim.startedAt:null;

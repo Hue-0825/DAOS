@@ -1,4 +1,4 @@
-import {PARKING,RACKS,SIZE,STAGES,BELTS,inFloor,armTransferPose} from './warehouse-engine.mjs?v=26';
+import {PARKING,RACKS,SIZE,STAGES,BELTS,inFloor,armTransferPose} from './warehouse-engine.mjs?v=27';
 
 const W=1320,H=700;
 const project=(x,y,z=0)=>[540+(x-y)*20,69+(x+y)*10.7-z];
@@ -312,7 +312,8 @@ export function createScene(canvas){
         deck=21;
         break;
     }
-    if(robot.job&&!robot.fetching&&!STAGES[robot.stage].fixed){
+    const dropped=sim.dropIncident?.robotId===robot.id&&sim.dropIncident.phase!=='resumed';
+    if(robot.job&&!robot.fetching&&!STAGES[robot.stage].fixed&&!dropped){
       const offset=robot.stage===0?.23:-.17;
       prism(ctx,x+offset,y-.16,.34,.34,deck,7,boxes[robot.stage%boxes.length]);
       line(ctx,[project(x+offset+.15,y-.15,deck+7),project(x+offset+.15,y+.17,deck+7)],'#e0c29a',1);
@@ -439,6 +440,17 @@ export function createScene(canvas){
       .sort((a,b)=>a.depth-b.depth);
     for(const object of sorted)object.draw(ctx);
     for(const label of signs)sign(ctx,...label);
+    const drop=sim.dropIncident;
+    if(drop&&drop.phase!=='resumed'){
+      const [x,y]=drop.point;
+      const [cx,cy]=project(x,y);
+      ctx.beginPath();
+      ctx.ellipse(cx,cy,27,16,0,0,Math.PI*2);
+      ctx.fillStyle='#ff394530';ctx.fill();
+      ctx.strokeStyle='#32151c';ctx.lineWidth=6;ctx.stroke();
+      ctx.strokeStyle='#ff5765';ctx.lineWidth=3;ctx.stroke();
+      prism(ctx,x+.26,y+.26,.42,.42,0,8,boxes[0],'#ffb7a2');
+    }
     drawBubbles(sim,selected,manualStop,now);
     // A stable equipment detail view makes each machine identifiable at desktop size.
     if(focused){

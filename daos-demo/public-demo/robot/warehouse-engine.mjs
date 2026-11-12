@@ -68,9 +68,13 @@ export const BACKUP_LIFETIME_MS = 45000;
 const BACKUP_REFRESH_MS = 10000;
 const CLEARANCE_WINDOW_MS=6500;
 const STEP_MS=350;
+export const DEMO_PARCELS=11;
+export const DROP_CUTOFF_MS=90_000;
+const DROP_INSPECTION_SECONDS=2;
+const DROP_RECOVERY_SECONDS=5;
 
 export class Warehouse {
-  constructor(now=Date.now(), {compact=false}={}) {
+  constructor(now=Date.now(), {compact=false,dropChance=0,random=Math.random}={}) {
     this.jobs = new Map();
     this.backup = new Set();
     this.backupAt = null;
@@ -107,17 +111,18 @@ export class Warehouse {
     this.events = [];
     this.startedAt=now;
     this.specialEvents=[];
+    this.dropAt=dropChance>0&&random()*100<dropChance?now+12_000+random()*30_000:null;
+    this.dropIncident=null;
     this.operatingMode='online';
     this.pending = 0;
     this.synced = 0;
     this.resetFleet();
     for(const robot of this.robots)this.edges[zoneOf(robot.cell)].reservations.set(key(robot.cell),robot.id);
-    const opening = compact?[[5,0]]:[[38,5],[5,0],[4,5],[3,2],[4,0]];
-    const demoDocks=[0,2,1,0,1];
+    const opening = compact?[[DEMO_PARCELS,1]]:[[38,5],[5,0],[4,5],[3,2],[4,0]];
     for (const [stage,[count,start]] of opening.entries()) {
       for (let i=0; i<count; i++) {
         const id=`${BATCH}-${String(this.jobs.size+1).padStart(2,'0')}`;
-        const segment=compact?demoDocks[i]:(i+start)%3;
+        const segment=(i+start)%3;
         const job={id,stage,segment,lane:0,robot:null,barcode:id,quantity:1,dock:segment+1};
         this.jobs.set(id,job);
         this.physicalScans.set(id,{stage,location:null,barcode:id,quantity:1,dock:segment+1});
@@ -185,7 +190,10 @@ export class Warehouse {
       const robot=this.robots.find(robot=>robot.job===job);
       const belt=job.belt;
       let kind='station',holder=null,coordinates=scan?.location?.split(',').map(Number);
-      if(belt){
+      const drop=this.dropIncident?.taskId===id?this.dropIncident:null;
+      if(drop&&drop.phase!=='resumed'){
+        kind='floor';coordinates=drop.point;
+      }else if(belt){
         kind='conveyor';holder=belt.id;
         coordinates=belt.from.map((value,i)=>value+(belt.to[i]-value)*belt.progress);
       }else if(robot&&!STAGES[robot.stage].fixed&&!robot.fetching){
@@ -200,6 +208,7 @@ export class Warehouse {
       return [id,{
         kind,holder,coordinates:coordinates?.map(value=>Math.round(value*100)/100)??null,
         stage:job.stage,scan:scan?{...scan}:null,
+        ...(kind==='floor'&&drop.scan?{incidentScan:{...drop.scan}}:{}),
       }];
     }));
   }
@@ -444,6 +453,10 @@ export class Warehouse {
     if (phase==='recovering') return '메인 전환 · 안전 정지';
     if (phase==='handover') return '운전 전환 대기';
     if (phase==='stopped'||phase==='expired') return '안전 정지';
+    if(this.dropIncident?.robotId===robot.id){
+      const status={isolated:'낙하 · 통로 통제',inspection:'현장 확인 · 재스캔',held:'격리 · 확인 보류'}[this.dropIncident.phase];
+      if(status)return status;
+    }
     if(phase==='backup'&&robot.drg==='RED')return '권한·엣지 확인 대기';
     if(robot.job?.auditHold)return '스캔 확인 대기';
     if (phase==='waiting') return '작업표 대기';
@@ -480,6 +493,55 @@ export class Warehouse {
     this.recordSpecial('notice',alive?'공유 통로 엣지 복구':'공유 통로 엣지 장애',alive?'통로 예약과 새 로그 복제가 재개됩니다.':'공유 통로의 추가 승인이 필요한 작업을 보류합니다.',now);
     this.note('공유 통로 엣지',alive?'연결 복구 · 새 인계 기록 복제 재개':'연결 끊김 · 공유 통로 협상 불가');
   }
+  logDrop(title,detail,now){
+    const {robotId,taskId,point}=this.dropIncident;
+    const message=`${robotId} · ${taskId} · (${point.join(', ')}) · ${detail}`;
+    this.recordSpecial('drop',title,message,now);
+    this.note(robotId,`${title} · ${message}`);
+  }
+
+  updateDrop(now,clearing){
+    const drop=this.dropIncident;
+    if(drop){
+      const job=this.jobs.get(drop.taskId);
+      if(drop.phase==='held'||drop.phase==='resumed')return;
+      if(job.auditHold){
+        drop.phase='held';
+        this.robots.find(robot=>robot.id===drop.robotId).stations=[];
+        this.logDrop('낙하 대응 · 확인 보류','복구 대조에서 보류되어 현장 통제를 유지합니다.',now);
+        return;
+      }
+      if(clearing)return;
+      const elapsed=this.simTime-drop.startedAt;
+      if(drop.phase==='isolated'&&elapsed>=DROP_INSPECTION_SECONDS){
+        const evidence=this.physicalScans.get(job.id);
+        drop.scan={barcode:evidence?.barcode,quantity:evidence?.quantity,dock:evidence?.dock,location:drop.point.join(',')};
+        drop.phase='inspection';
+        this.logDrop('낙하 대응 · 현장 확인','담당자가 상자와 적재 상태를 확인하고 낙하 지점에서 다시 스캔합니다.',now);
+      }
+      if(drop.phase==='inspection'&&elapsed>=DROP_RECOVERY_SECONDS){
+        const verified=drop.scan.barcode===job.id&&drop.scan.quantity===job.quantity&&drop.scan.dock===job.dock
+          &&drop.scan.location===drop.point.join(',');
+        if(!verified){
+          job.auditHold=true;
+          drop.phase='held';
+          this.robots.find(robot=>robot.id===drop.robotId).stations=[];
+          this.logDrop('낙하 대응 · 확인 보류','재스캔 불일치로 상자를 격리하고 통행을 제한합니다.',now);
+          return;
+        }
+        drop.phase='resumed';
+        this.logDrop('낙하 대응 · 운반 재개','재스캔 일치 · 담당자 모의 승인 후 재적재하고 통행을 재개합니다.',now);
+      }
+      return;
+    }
+    if(clearing||this.dropAt===null||now<this.dropAt||now-this.startedAt>=DROP_CUTOFF_MS)return;
+    const robot=this.robots.find(robot=>robot.stage===1&&robot.job&&!robot.job.auditHold
+      &&!robot.fetching&&!robot.next&&robot.route.length&&key(robot.cell)!==key(robot.target));
+    if(!robot)return;
+    this.dropIncident={robotId:robot.id,taskId:robot.job.id,point:[...robot.cell],startedAt:this.simTime,phase:'isolated'};
+    this.logDrop('AM 운반 중 박스 낙하','해당 로봇을 정지하고 낙하 칸의 통행을 제한합니다.',now);
+  }
+
   tick(dt,now=Date.now()) {
     this.now=now;
     this.updateConnection(now);
@@ -495,9 +557,10 @@ export class Warehouse {
     const remaining=this.backupAt+BACKUP_LIFETIME_MS-now;
     const clearing=phase==='backup'&&remaining<=CLEARANCE_WINDOW_MS;
     const noBlocks=new Set();
+    this.updateDrop(now,clearing);
 
     for (const robot of this.robots) {
-      if(robot.job?.auditHold)continue;
+      if(robot.job?.auditHold||this.dropIncident?.robotId===robot.id&&this.dropIncident.phase!=='resumed')continue;
       if(!clearing)robot.clearance=null;
       if(clearing&&zoneOf(robot.cell)===1&&!robot.clearance&&!STAGES[robot.stage].fixed){
         const exits=[10,22].flatMap(x=>[robot.cell[1],robot.cell[1]-1,robot.cell[1]+1].map(y=>[x,y]));

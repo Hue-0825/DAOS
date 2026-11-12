@@ -1,5 +1,5 @@
-import {BATCH,STAGES,Warehouse,BACKUP_LIFETIME_MS} from './warehouse-engine.mjs?v=27';
-import {createScene} from './warehouse-scene.mjs?v=30';
+import {BATCH,STAGES,Warehouse} from './warehouse-engine.mjs?v=28';
+import {createScene} from './warehouse-scene.mjs?v=31';
 
 const $=id=>document.getElementById(id);
 const canvas=$('warehouse');
@@ -24,7 +24,6 @@ const INCIDENTS={
   backup:['DAOS','DAOS 가동 중 · 백업 데이터로 작업 계속','서버가 끊기기 전에 저장한 작업표와 구역 점유권으로 상자 운반과 인계를 이어갑니다.'],
   stopped:['■','안전 정지 · DAOS 꺼짐','현재 위치에서 대기합니다. 서버를 복구하거나 DAOS를 켜면 조건에 따라 작업을 이어갑니다.'],
   waiting:['…','백업 작업표 미수신','서버를 복구한 뒤 오른쪽 위에서 백업 작업표를 전송해 주세요.'],
-  expired:['■','백업 작업표 만료 · 안전 정지','만료 전 권한과 통로가 확보된 로봇은 통로를 비웁니다. 만료 뒤에는 정지하고 복구를 기다립니다.'],
   drained:['✓','현장 작업표 처리 완료','저장한 물량의 상차를 마쳤습니다. 다음 작업표를 받으려면 연결을 복구해 주세요.'],
 };
 const WORK_SOURCES={
@@ -34,7 +33,6 @@ const WORK_SOURCES={
   backup:'DAOS 가동 · 백업 데이터 사용 중',
   stopped:'DAOS 꺼짐 · 안전 정지',
   waiting:'백업 데이터 대기 중',
-  expired:'백업 데이터 만료',
   drained:'백업 작업 완료',
 };
 function set(id,text){if($(id).textContent!==text)$(id).textContent=text;}
@@ -275,11 +273,10 @@ function paint(){
   set('incident-icon',icon);
   set('incident-title',title);
   set('incident-detail',detail);
-  set('drive-mode',manualStop?'일시정지':{recovering:'메인 전환 · 안전 정지',online:'정상 운전',handover:'운전 전환',backup:'DAOS 백업 운전',stopped:'안전 정지',waiting:'백업 대기',expired:'유효기간 만료',drained:'작업 완료'}[phase]);
+  set('drive-mode',manualStop?'일시정지':{recovering:'메인 전환 · 안전 정지',online:'정상 운전',handover:'운전 전환',backup:'DAOS 백업 운전',stopped:'안전 정지',waiting:'백업 대기',drained:'작업 완료'}[phase]);
   set('batch',BATCH);
   set('total',`${jobs.length-finished}개 남음`);
-  const remaining=Math.max(0,Math.ceil((sim.backupAt+BACKUP_LIFETIME_MS-now)/1000));
-  set('backup',sim.backupAt===null?'미전송':`${sim.backupRemaining}개 · 잔여 공정 ${sim.backupStagesRemaining}건 · ${remaining}초`);
+  set('backup',sim.backupAt===null?'미전송':`${sim.backupRemaining}개 · 잔여 공정 ${sim.backupStagesRemaining}건`);
   const currentStep=phase==='recovering'?'step-reconcile':online?(sim.audit?'step-reconcile':'step-prepare'):'step-continue';
   for(const id of ['step-prepare','step-continue','step-reconcile']){
     $(id).setAttribute('aria-current',id===currentStep?'step':'false');
@@ -290,7 +287,6 @@ function paint(){
     backup:`백업 사용 중 · 공정 완료 ${sim.localTransfers.length}건`,
     stopped:'DAOS 꺼짐 · 안전 정지',
     waiting:'백업 작업표 대기',
-    expired:'작업표 만료 · 안전 정지',
     drained:`백업 작업 완료 · 공정 ${sim.localTransfers.length}건`,
   };
   set('track-continue',outageSummary[phase]??(sim.audit?`장애 중 공정 기록 ${sim.audit.replicated}건`:'연결 끊기 대기'));
@@ -357,7 +353,7 @@ function paint(){
   if(inspector.parentElement.open){
     const leases=(sim.central.leases.get(robot.id)??[]).map(lease=>({
       ...lease,taskIds:[...lease.taskIds].slice(0,3),taskCount:lease.taskIds.size,
-      from:new Date(lease.from).toISOString(),until:new Date(lease.until).toISOString(),
+      from:new Date(lease.from).toISOString(),until:lease.until===null?null:new Date(lease.until).toISOString(),
     }));
     set('robot-records',JSON.stringify({leases,latestEvent:robot.localLog.at(-1)??null},null,2));
   }
@@ -404,7 +400,7 @@ $('expand-events').addEventListener('click',()=>{
 
 $('send-backup').addEventListener('click',()=>{
   if(sim.sendBackup(demoNow())){
-    set('backup-result',`현장 작업표 전송 완료 · 상자 ${sim.backup.size}개 · 시연 유효시간 ${BACKUP_LIFETIME_MS/1000}초`);
+    set('backup-result',`현장 작업표 전송 완료 · 상자 ${sim.backup.size}개`);
     paint();
   }
 });

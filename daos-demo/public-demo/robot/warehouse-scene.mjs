@@ -1,4 +1,4 @@
-import {PARKING,RACKS,SIZE,STAGES,BELTS,inFloor,armTransferPose} from './warehouse-engine.mjs?v=27';
+import {PARKING,RACKS,SIZE,STAGES,BELTS,inFloor,armTransferPose} from './warehouse-engine.mjs?v=28';
 
 const W=1320,H=700;
 const project=(x,y,z=0)=>[540+(x-y)*20,69+(x+y)*10.7-z];
@@ -332,7 +332,7 @@ export function createScene(canvas){
     const stopped=phase==='stopped'||manualStop;
     const recovery=phase==='recovering'?recoveryBubbles[sim.recoveryPhase]:null;
     const badgeWidth=backup||stopped||recovery?32:0;
-    const warning=['recovering','handover','expired'].includes(phase);
+    const warning=['recovering','handover'].includes(phase);
     const fill=recovery?.fill??(stopped?'#ffe1e4':backup?'#d7eee2':warning?'#efe2cb':'#e0e8f1');
     const height=20,gap=5;
     const previous=new Map(bubbleLayout.map(item=>[item.robot.id,item]));

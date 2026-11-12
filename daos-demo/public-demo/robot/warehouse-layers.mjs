@@ -4,8 +4,8 @@ export const zoneOf = ([x]) => x<11?0:x<22?1:2;
 export const LEASE_MARGIN_MS = 500;
 
 export function covers(lease, taskId, epoch, now, duration=0) {
-  return Boolean(lease && lease.epoch===epoch && lease.from<=now && now<lease.until
-    && now+duration+LEASE_MARGIN_MS<=lease.until && lease.taskIds.has(taskId));
+  return Boolean(lease && lease.epoch===epoch && lease.from<=now && lease.taskIds.has(taskId)
+    && (lease.until===null || (now<lease.until && now+duration+LEASE_MARGIN_MS<=lease.until)));
 }
 
 export class CentralPlan {
@@ -14,7 +14,7 @@ export class CentralPlan {
     this.revision=0;
   }
 
-  issue(robots,jobIds,epoch,from,until) {
+  issue(robots,jobIds,epoch,from,until=null) {
     const taskIds=new Set(jobIds);
     const revision=++this.revision;
     this.leases=new Map(robots.map(robot=>[robot.id,ZONES_BY_ROLE[robot.stage].map(zone=>({

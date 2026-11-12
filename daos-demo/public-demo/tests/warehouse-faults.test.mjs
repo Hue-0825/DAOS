@@ -54,19 +54,18 @@ function place(sim,placements){
   assert.ok(sim.specialEvents.some(event=>event.title==='통로 양보'));
 }
 {
-  const sim=new Warehouse(0);
-  const robot=sim.robots.find(robot=>robot.stage===1);
-  sim.robots=[robot];
-  sim.jobs.clear();
-  place(sim,[[robot,[16,4],[18,4]]]);
-  sim.sendBackup(0,false);
+  const sim=new Warehouse(0,{compact:true});
   sim.disconnect(100);
-  for(let now=38500;now<=46000;now+=50)sim.tick(.05,now);
-  assert.notEqual(zoneOf(robot.cell),1);
-  assert.equal(sim.offlinePhase(46000),'expired');
-  const settled=[...robot.position];
-  sim.tick(.05,46500);
-  assert.deepEqual(robot.position,settled);
+  const day=24*60*60*1000;
+  for(let now=1100;now<=45_000;now+=50)sim.tick(.05,now);
+  const remaining=sim.backupRemaining;
+  assert.ok(remaining>0);
+  assert.equal(sim.offlinePhase(day),'backup');
+  for(let now=day;now<=day+160_000;now+=50)sim.tick(.05,now);
+  assert.ok([...sim.jobs.values()].every(job=>job.stage===5));
+  assert.equal(sim.offlinePhase(day+160_000),'drained');
+  assert.equal(sim.mode,'offline');
+  assert.equal(sim.localTransfers.length,sim.jobs.size*5);
 }
 {
   const sim=new Warehouse(0,{compact:true});
@@ -76,4 +75,4 @@ function place(sim,placements){
   for(let i=22;i<=230;i++)sim.tick(.05,i*50);
   assert.ok(sim.backupStagesRemaining<count);
 }
-console.log('PASS: scan and replica quarantine, retained routes, head-on yield, occupancy release, pre-expiry clearance, visible inbound cargo, and remaining stages.');
+console.log('PASS: scan and replica quarantine, retained routes, head-on yield, occupancy release, full offline batch beyond the former timeout, visible inbound cargo, and remaining stages.');

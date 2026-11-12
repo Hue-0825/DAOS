@@ -9,11 +9,18 @@ for(const kind of ['scan','replica']){
   for(let i=22;i<=230;i++)sim.tick(.05,i*50);
   const task=sim.injectRecoveryFault(kind,11500);
   assert.ok(task);
+  const centralBefore=sim.centralLocations.get(task);
   sim.restore(11600);
   for(const now of [12600,13600,14600])sim.updateConnection(now);
   assert.equal(sim.mode,'online');
   assert.equal(sim.audit.held,1);
   assert.equal(sim.jobs.get(task).auditHold,true);
+  const evidence=sim.audit.comparison.find(row=>row.id===task);
+  assert.equal(evidence.result,'held');
+  assert.deepEqual(evidence.central,centralBefore);
+  assert.ok(evidence.position.coordinates.length===2);
+  if(kind==='scan')assert.equal(evidence.position.scan.location,'SCAN-MISMATCH');
+  else assert.ok(evidence.logs.some(log=>!log.replicated));
   assert.ok(sim.specialEvents.some(event=>event.title==='복구 검증 · 상자 격리'));
 }
 

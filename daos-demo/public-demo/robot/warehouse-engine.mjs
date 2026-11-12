@@ -45,6 +45,23 @@ function pathTo(start, end, blocked, allowed) {
 
 export const ARM_CYCLE_SECONDS = 2.4;
 const ARM_ARRIVAL_WAIT = .7;
+export function armTransferPose(robot,simTime) {
+  const [x,y]=robot.position;
+  const operating=robot.job&&robot.checked&&robot.checkUntil<=simTime;
+  const progress=operating?Math.min(robot.work/ARM_CYCLE_SECONDS,1):0;
+  const input=[x,y,10];
+  const output=robot.stage===2?[x+1,y,10]:[x+.87,y+.20,4];
+  const raised=([cx,cy])=>[cx,cy,46.4];
+  const poses=[[0,raised(input)],[.19,input],[.36,raised(input)],
+    [.60,raised(output)],[.77,output],[.86,raised(output)],[1,raised(input)]];
+  const end=poses.findIndex(([time],i)=>i>0&&progress<=time);
+  const [startTime,start]=poses[end-1], [endTime,finish]=poses[end];
+  const fraction=(progress-startTime)/(endTime-startTime);
+  const blend=fraction*fraction*(3-2*fraction);
+  const tool=start.map((value,i)=>value+(finish[i]-value)*blend);
+  return {tool,cargo:progress<.19?input:progress<.77?tool:output};
+}
+
 export const OUTAGE_ALERT_MS = 1000;
 export const RECOVERY_STEP_MS = 1000;
 export const BACKUP_LIFETIME_MS = 45000;
@@ -62,6 +79,7 @@ export class Warehouse {
     this.edges = ZONES.map(label=>new ZoneEdge(label));
     this.centralStages = new Map();
     this.centralLocations = new Map();
+    this.centralCapturedAt = null;
     this.positionPacket = null;
     this.recoveryPhase = null;
     this.physicalScans = new Map();
@@ -173,7 +191,7 @@ export class Warehouse {
       }else if(robot&&!STAGES[robot.stage].fixed&&!robot.fetching){
         kind='robot';holder=robot.id;coordinates=robot.position;
       }else if(robot&&STAGES[robot.stage].fixed&&robot.checked&&robot.work>0){
-        kind='arm';holder=robot.id;coordinates=robot.position;
+        kind='arm';holder=robot.id;coordinates=armTransferPose(robot,this.simTime).cargo.slice(0,2);
       }else if(job.stage===STAGES.length){
         kind='shipped';holder=`DOCK-${job.dock}`;
       }else if(!coordinates){
@@ -231,6 +249,15 @@ export class Warehouse {
     }
     let verified=0,held=0,confirmedEvents=0;
     const results=[];
+    // Capture the pre-outage central snapshot and edge evidence before reconciliation mutates them.
+    const locations=[...packet.positions].map(([id,position])=>{
+      const events=grouped.get(id)??[];
+      return {
+        id,central:this.centralLocations.get(id)??null,position,
+        logs:events.map(event=>({node:event.node,location:event.location,edge:this.edges[event.zone].label,
+          replicated:this.edges[event.zone].matches(event),sequence:event.seq})),
+      };
+    });
     const checks={candidates:0,ids:0,chain:0,scans:0,duplicates:0};
     const candidates=new Set([...grouped.keys(),...packet.changed.map(([id])=>id)]);
     for(const id of candidates){
@@ -254,6 +281,7 @@ export class Warehouse {
       const position=packet.positions.get(id),scan=position?.scan,last=chain.at(-1);
       const idsOk=!conflict&&chain.every(event=>event.eventId===`${event.epoch}/${event.node}/${event.seq}`);
       const chainOk=idsOk&&continuous&&stage===job.stage;
+      const missingReplica=chain.some(event=>!this.edges[event.zone].matches(event));
       const agreed=chainOk&&position?.stage===stage&&scan?.stage===stage
         &&(!last||scan.location===last.location)
         &&scan.barcode===job.barcode&&scan.quantity===job.quantity&&scan.dock===job.dock;
@@ -273,9 +301,19 @@ export class Warehouse {
         held++;
         this.recordSpecial('notice','복구 검증 · 상자 격리',`상자 ${id} · 위치 또는 기록 불일치로 확인 보류`,now);
       }
-      results.push({taskId:id,agreed,events:chain});
+      const reason=agreed?'위치·공정 대조 통과':!idsOk?'이벤트 ID 또는 중복 기록 충돌':
+        missingReplica?'엣지 복제 누락 또는 불일치':!chainOk?'공정 순서 또는 에폭 불일치':'가상 실물 스캔 불일치';
+      results.push({taskId:id,agreed,events:chain,reason});
     }
-    this.audit={verified,held,checks,received:packet.positions.size,changed:packet.changed.length,replicated:this.edges.reduce((total,edge)=>total+edge.log.size,0)};
+    const outcomes=new Map(results.map(result=>[result.taskId,result]));
+    const comparison=locations.map(row=>{
+      const outcome=outcomes.get(row.id);
+      if(outcome)return {...row,result:outcome.agreed?'matched':'held',reason:outcome.reason};
+      if(this.jobs.get(row.id).auditHold)return {...row,result:'held',reason:'이전 복구에서 보류'};
+      return {...row,result:'unchanged',reason:'장애 직전 기록과 위치·공정 동일'};
+    });
+    this.audit={verified,held,checks,comparison,centralCapturedAt:this.centralCapturedAt,
+      capturedAt:packet.capturedAt,completedAt:now,epoch:packet.epoch,received:packet.positions.size,changed:packet.changed.length,replicated:this.edges.reduce((total,edge)=>total+edge.log.size,0)};
     this.auditHistory.push({epoch:this.epoch,results});
     this.epoch++;
     this.mode='online';
@@ -329,6 +367,7 @@ export class Warehouse {
     this.recoveryPhase=null;
     this.positionPacket=null;
     if (!interruptedRecovery){
+      this.centralCapturedAt=now;
       this.centralStages=new Map([...this.jobs].map(([id,job])=>[id,job.stage]));
       const positions=this.inventoryPositions();
       for(const [id,position] of positions){

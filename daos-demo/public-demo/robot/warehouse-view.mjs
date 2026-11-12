@@ -1,5 +1,5 @@
-import {BATCH,STAGES,Warehouse,BACKUP_LIFETIME_MS} from './warehouse-engine.mjs?v=25';
-import {createScene} from './warehouse-scene.mjs?v=28';
+import {BATCH,STAGES,Warehouse,BACKUP_LIFETIME_MS} from './warehouse-engine.mjs?v=26';
+import {createScene} from './warehouse-scene.mjs?v=29';
 
 const $=id=>document.getElementById(id);
 const canvas=$('warehouse');
@@ -141,6 +141,56 @@ function paintOverview(finished,total){
   timeline.title=summary;
 }
 
+const positionNames={station:'작업대',conveyor:'컨베이어',robot:'운반 로봇',arm:'로봇팔',shipped:'상차 완료'};
+const stageName=stage=>STAGES[stage]?.label??'상차 완료';
+let renderedComparison;
+
+function describePosition(position){
+  if(!position)return '중앙 위치 기록 없음';
+  const coordinates=position.coordinates?.map(value=>Number(value).toFixed(2)).join(', ');
+  return [position.holder??positionNames[position.kind],coordinates&&`(${coordinates})`,stageName(position.stage)].filter(Boolean).join(' · ');
+}
+
+function paintPositionComparison(){
+  if($('position-comparison').hidden)return;
+  const audit=sim.audit;
+  $('position-comparison-table').hidden=!audit;
+  if(!audit){
+    set('position-comparison-times','');
+    set('position-comparison-note',sim.mode==='recovering'?'전환 위치와 로그를 대조 중입니다.':
+      '서버를 끊었다가 복구하면 상자별 위치와 대조 결과가 표시됩니다.');
+    return;
+  }
+  const stamp=at=>elapsedLabel(Math.max(0,at-sim.startedAt),true);
+  const unchanged=audit.comparison.filter(row=>row.result==='unchanged').length;
+  const allHeld=audit.comparison.filter(row=>row.result==='held').length;
+  set('position-comparison-note',`에폭 ${audit.epoch} · 상자 ${audit.received}개 · 대조 통과 ${audit.verified}개 · 변경 없음 ${unchanged}개 · 보류 ${allHeld}개`);
+  set('position-comparison-times',`시연 경과 시간 · 중앙 장애 +${stamp(audit.centralCapturedAt)} → 전환 위치 저장 +${stamp(audit.capturedAt)} → 대조 완료 +${stamp(audit.completedAt)}`);
+  if(renderedComparison===audit)return;
+  renderedComparison=audit;
+  const cells=audit.comparison.map(({id,central,position,logs,result,reason})=>{
+    const row=document.createElement('tr');
+    const heading=document.createElement('th');
+    heading.scope='row';heading.textContent=id;row.append(heading);
+    const cell=(...lines)=>{
+      const td=document.createElement('td');
+      for(const line of lines){
+        const item=document.createElement('div');item.textContent=line;td.append(item);
+      }
+      row.append(td);
+      return td;
+    };
+    cell(describePosition(central));
+    cell(...(logs.length?logs.map(log=>`${log.node} #${log.sequence} · (${log.location}) · ${log.edge} ${log.replicated?'복제 확인':'복제 누락·불일치'}`):['장애 중 완료 로그 없음']));
+    const scan=position.scan?.location;
+    cell(describePosition(position),scan==='SCAN-MISMATCH'?'스캔 위치 불일치':scan?`마지막 스캔 지점 (${scan})`:'스캔 좌표 기록 없음');
+    const outcome=cell({held:'확인 보류',matched:'일치 · 운전 재개',unchanged:'변경 없음'}[result],reason);
+    outcome.dataset.result=result;
+    return row;
+  });
+  $('position-comparison-rows').replaceChildren(...cells);
+}
+
 function paint(){
   const now=demoNow();
   const online=sim.mode==='online',phase=sim.offlinePhase(now)??'online';
@@ -157,6 +207,7 @@ function paint(){
     :phase==='recovering'?recoveryStatus[sim.recoveryPhase]:INCIDENTS[phase];
   const jobs=[...sim.jobs.values()],finished=jobs.filter(job=>job.stage===STAGES.length&&!job.auditHold).length;
   paintOverview(finished,jobs.length);
+  paintPositionComparison();
   const connection=$('connection');
   $('mode').dataset.mode=sim.mode;
   $('incident').dataset.phase=warningStop?'stopped':alarm?'alert':phase;
@@ -309,6 +360,19 @@ function showEventFilter(special){
 }
 $('show-all-events').addEventListener('click',()=>showEventFilter(false));
 $('show-special-events').addEventListener('click',()=>showEventFilter(true));
+
+$('show-position-comparison').addEventListener('click',()=>{
+  const panel=$('position-comparison'),button=$('show-position-comparison');
+  panel.hidden=!panel.hidden;
+  button.setAttribute('aria-expanded',String(!panel.hidden));
+  paintPositionComparison();
+});
+$('expand-events').addEventListener('click',()=>{
+  const button=$('expand-events');
+  const expanded=button.closest('.operations-overview').classList.toggle('events-expanded');
+  button.setAttribute('aria-expanded',String(expanded));
+  set('expand-events',expanded?'이벤트 접기':'이벤트 펼치기');
+});
 
 $('send-backup').addEventListener('click',()=>{
   if(sim.sendBackup(demoNow())){

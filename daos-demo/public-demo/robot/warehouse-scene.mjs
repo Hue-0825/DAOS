@@ -1,4 +1,4 @@
-import {PARKING,RACKS,SIZE,STAGES,BELTS,inFloor,ARM_CYCLE_SECONDS} from './warehouse-engine.mjs?v=25';
+import {PARKING,RACKS,SIZE,STAGES,BELTS,inFloor,armTransferPose} from './warehouse-engine.mjs?v=26';
 
 const W=1320,H=700;
 const project=(x,y,z=0)=>[540+(x-y)*20,69+(x+y)*10.7-z];
@@ -260,20 +260,10 @@ export function createScene(canvas){
         prism(ctx,x-.45,y-.40,.90,.80,0,7,dark);
         prism(ctx,x-.32,y-.29,.64,.58,7,9,body);
         for(const dx of [-.33,.30])for(const dy of [-.28,.25])prism(ctx,x+dx,y+dy,.06,.06,7,2,metal);
-        const operating=robot.job&&robot.checked&&robot.checkUntil<=sim.simTime;
-        const progress=operating?Math.min(robot.work/ARM_CYCLE_SECONDS,1):0;
-        // The arm art is enlarged around its anchor; undo that scale for real transfer points.
         const scale=1.6;
-        const input=[x,y,10/scale];
-        const output=robot.stage===2?[x+1/scale,y,10/scale]:[x+.87/scale,y+.20/scale,4/scale];
-        const raised=([a,b])=>[a,b,29];
-        const poses=[[0,raised(input)],[.19,input],[.36,raised(input)],
-          [.60,raised(output)],[.77,output],[.86,raised(output)],[1,raised(input)]];
-        const end=poses.findIndex(([time],i)=>i>0&&progress<=time);
-        const [startTime,start]=poses[end-1], [endTime,finish]=poses[end];
-        const fraction=(progress-startTime)/(endTime-startTime);
-        const blend=fraction*fraction*(3-2*fraction);
-        const [toolX,toolY,toolZ]=start.map((value,i)=>value+(finish[i]-value)*blend);
+        const {tool,cargo}=armTransferPose(robot,sim.simTime);
+        const toLocal=([cx,cy,cz])=>[x+(cx-x)/scale,y+(cy-y)/scale,cz/scale];
+        const [toolX,toolY,toolZ]=toLocal(tool);
         const toolLength=robot.stage===2?19:15;
         const shoulder=project(x-.30,y+.62,18);
         const elbow=project(x-.42+(toolX-x)*.3,y+.45,44+toolZ*.13);
@@ -303,7 +293,7 @@ export function createScene(canvas){
           prism(ctx,x+.46,y-.12,.57,.52,0,3/scale,['#bda27c','#705a46','#917455']);
         }
         if(robot.job){
-          const [cx,cy,cz]=progress<.19?input:progress<.77?[toolX,toolY,toolZ]:output;
+          const [cx,cy,cz]=toLocal(cargo);
           const half=.22/scale, boxHeight=8/scale;
           prism(ctx,cx-half,cy-half,2*half,2*half,cz,boxHeight,boxes[0]);
           line(ctx,[project(cx,cy-half,cz+boxHeight),project(cx,cy+half,cz+boxHeight)],'#f7dba0',1.25);

@@ -1,5 +1,5 @@
-import {BATCH,STAGES,Warehouse,BACKUP_LIFETIME_MS} from './warehouse-engine.mjs?v=22';
-import {createScene} from './warehouse-scene.mjs?v=25';
+import {BATCH,STAGES,Warehouse,BACKUP_LIFETIME_MS} from './warehouse-engine.mjs?v=23';
+import {createScene} from './warehouse-scene.mjs?v=26';
 
 const $=id=>document.getElementById(id);
 const canvas=$('warehouse');
@@ -213,6 +213,21 @@ function paint(){
   set('active',`이동 및 작업 ${moving} / ${sim.robots.length}대`);
   const running=!paused&&(online||phase==='backup');
   set('facility-mode',running?(phase==='backup'?'DAOS · 컨베이어 백업 운전':'중앙 · 컨베이어 운전'):'컨베이어 · 정지');
+  const inTransit=sim.jobs.get(sim.armTraceId)??jobs.find(job=>job.belt&&!job.auditHold);
+  const handoff=sim.armHandoff??(inTransit?.belt?{kind:'transit',id:inTransit.id,beltId:inTransit.belt.id}:null);
+  for(const step of $('arm-flow-stages').children){
+    if(step.dataset.step===handoff?.kind)step.setAttribute('aria-current','step');
+    else step.removeAttribute('aria-current');
+  }
+  if(handoff){
+    const label={
+      transit:`${handoff.beltId} · 이송 중, 로봇팔 대기`,
+      arrival:`${handoff.beltId} · 끝 지점 도착, 인수 대기`,
+      pickup:`${handoff.robot} · 도착 및 스캔 확인 후 인수`,
+      placed:handoff.beltId?`${handoff.robot} · ${handoff.beltId}에 내려놓음`:`${handoff.robot} · 팔레트에 내려놓음`,
+    };
+    set('arm-flow-detail',`상자 ${handoff.id} · ${label[handoff.kind]}`);
+  }else set('arm-flow-detail','상자가 도착할 때까지 로봇팔이 대기합니다.');
   set('belt-count',`이송 중 ${jobs.filter(job=>job.belt).length}개 / 벨트 6대`);
   set('check-count',`검증 통과 ${sim.checkTotals.passed}건 · 보류 ${jobs.filter(job=>job.auditHold).length}개`);
   const latest=sim.checks[0];

@@ -1,4 +1,4 @@
-import {PARKING,RACKS,SIZE,STAGES,BELTS,inFloor,ARM_CYCLE_SECONDS} from './warehouse-engine.mjs?v=22';
+import {PARKING,RACKS,SIZE,STAGES,BELTS,inFloor,ARM_CYCLE_SECONDS} from './warehouse-engine.mjs?v=23';
 
 const W=1320,H=700;
 const project=(x,y,z=0)=>[540+(x-y)*20,69+(x+y)*10.7-z];
@@ -262,8 +262,10 @@ export function createScene(canvas){
         for(const dx of [-.33,.30])for(const dy of [-.28,.25])prism(ctx,x+dx,y+dy,.06,.06,7,2,metal);
         const operating=robot.job&&robot.checked&&robot.checkUntil<=sim.simTime;
         const progress=operating?Math.min(robot.work/ARM_CYCLE_SECONDS,1):0;
-        const input=[x-(robot.stage===2?.20:.26),y,10];
-        const output=robot.stage===2?[x+1,y,10]:[x+.87,y+.20,4];
+        // The arm art is enlarged around its anchor; undo that scale for real transfer points.
+        const scale=1.6;
+        const input=[x,y,10/scale];
+        const output=robot.stage===2?[x+1/scale,y,10/scale]:[x+.87/scale,y+.20/scale,4/scale];
         const raised=([a,b])=>[a,b,29];
         const poses=[[0,raised(input)],[.19,input],[.36,raised(input)],
           [.60,raised(output)],[.77,output],[.86,raised(output)],[1,raised(input)]];
@@ -277,7 +279,6 @@ export function createScene(canvas){
         const elbow=project(x-.42+(toolX-x)*.3,y+.45,44+toolZ*.13);
         const wrist=project(toolX,toolY,toolZ+toolLength+7);
         if(recordHit){
-          const scale=1.6;
           armHitAreas.set(robot.id,[shoulder,elbow,wrist,[wrist[0],wrist[1]+toolLength]]
             .map(([px,py])=>[sx+(px-sx)*scale,sy+(py-sy)*scale]));
         }
@@ -299,12 +300,13 @@ export function createScene(canvas){
         }else{
           line(ctx,[[wx-9,wy+10],[wx+9,wy+10]],top,4);
           for(const dx of [-6,6]){ctx.beginPath();ctx.ellipse(wx+dx,wy+15,4,2,0,0,Math.PI*2);ctx.fillStyle='#191b2e';ctx.fill();}
-          prism(ctx,x+.48,y-.15,.82,.72,0,3,['#bda27c','#705a46','#917455']);
+          prism(ctx,x+.46,y-.12,.57,.52,0,3/scale,['#bda27c','#705a46','#917455']);
         }
         if(robot.job){
           const [cx,cy,cz]=progress<.19?input:progress<.77?[toolX,toolY,toolZ]:output;
-          prism(ctx,cx-.18,cy-.18,.36,.36,cz-1,8,boxes[0]);
-          line(ctx,[project(cx,cy-.18,cz+7),project(cx,cy+.18,cz+7)],'#efd19d',1.3);
+          const half=.22/scale, boxHeight=8/scale;
+          prism(ctx,cx-half,cy-half,2*half,2*half,cz,boxHeight,boxes[0]);
+          line(ctx,[project(cx,cy-half,cz+boxHeight),project(cx,cy+half,cz+boxHeight)],'#f7dba0',1.25);
         }
         deck=8;
         break;
@@ -419,8 +421,16 @@ export function createScene(canvas){
     }
     const cargo=[...sim.buffers()].map(({point:[x,y],count,held,stage})=>({depth:x+y-.18,draw:target=>{
       const [sx,sy]=project(x+.36,y-.27);
-      const base=stage===2?10:stage===3?3:0;
-      for(let i=0;i<Math.min(2,count);i++)prism(target,x+.19,y-.46,.43,.38,base+i*5,5,boxes[stage%boxes.length]);
+      const armInput=stage===2||stage===3;
+      if(armInput){
+        for(let i=0;i<Math.min(2,count);i++){
+          const center=x-i*.52;
+          prism(target,center-.22,y-.22,.44,.44,10,8,boxes[0],i===0?'#f7d27c':'#102135');
+          line(target,[project(center,y-.22,18),project(center,y+.22,18)],'#f7dba0',2);
+        }
+      }else{
+        for(let i=0;i<Math.min(2,count);i++)prism(target,x+.19,y-.46,.43,.38,i*5,5,boxes[stage%boxes.length]);
+      }
       if(held)sign(target,`보류 ${held}`,x+.38,y-.25,'#ff9aa6');
       else if(count>1)text(target,String(count),sx+8,sy-7,'#fff2cc',10,'center');
     }}));

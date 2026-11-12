@@ -44,6 +44,7 @@ function pathTo(start, end, blocked, allowed) {
 }
 
 export const ARM_CYCLE_SECONDS = 2.4;
+const ARM_ARRIVAL_WAIT = .7;
 export const OUTAGE_ALERT_MS = 1000;
 export const RECOVERY_STEP_MS = 1000;
 export const BACKUP_LIFETIME_MS = 45000;
@@ -69,6 +70,8 @@ export class Warehouse {
     this.audit = null;
     this.simTime = 0;
     this.beltTime = 0;
+    this.armHandoff=null;
+    this.armTraceId=null;
     this.checks = [];
     this.checkTotals={passed:0,held:0};
     this.handoffRecords = new Map();
@@ -95,9 +98,23 @@ export class Warehouse {
       for (let i=0; i<count; i++) {
         const id=`${BATCH}-${String(this.jobs.size+1).padStart(2,'0')}`;
         const position=(i+start)%9;
-        this.jobs.set(id,{id,stage,segment:position%3,lane:0,robot:null,barcode:id,quantity:1,dock:position%3+1});
+        const job={id,stage,segment:position%3,lane:0,robot:null,barcode:id,quantity:1,dock:position%3+1};
+        this.jobs.set(id,job);
         this.physicalScans.set(id,{stage,location:null,barcode:id,quantity:1,dock:position%3+1});
         this.handoffRecords.set(id,{stage,actor:'입고 확인',location:null,barcode:id,quantity:1,dock:position%3+1});
+        if(STAGES[stage].fixed){
+          const belt=BELTS.find(item=>item.stage===stage-1&&item.segment===job.segment);
+          if(compact){
+            // The opening boxes are visibly in transit, not waiting invisibly inside an arm.
+            job.stage--;
+            this.physicalScans.get(id).stage=job.stage;
+            this.handoffRecords.get(id).stage=job.stage;
+            job.belt={...belt,progress:0,actor:belt.id};
+            if(belt.stage===1&&this.armTraceId===null)this.armTraceId=job.id;
+          }else{
+            job.armArrival={beltId:belt.id,readyAt:0};
+          }
+        }
       }
     }
     this.note('관제',`출고 배치 ${BATCH} · 상자 ${this.jobs.size}개, 진행 중인 공정부터 이어서 작업합니다.`);
@@ -346,6 +363,12 @@ export class Warehouse {
     }
     this.note('관제',messages[phase]);
   }
+  traceArmHandoff(handoff) {
+    if(this.armTraceId===null||this.armTraceId===handoff.id)this.armHandoff=handoff;
+  }
+  armInputReady(job) {
+    return !STAGES[job.stage].fixed || Boolean(job.armArrival&&job.armArrival.readyAt<=this.simTime);
+  }
   canHandoff(job) {
     if(job.stage>=3)return true;
     const count=[...this.jobs.values()].filter(next=>next.segment===job.segment&&next.lane===job.lane&&next.stage===job.stage+1).length;
@@ -381,6 +404,15 @@ export class Warehouse {
     if(robot.yieldTarget||robot.yieldUntil>this.simTime)return '통로 양보 중';
     if(robot.checking)return '2차 검증 · 스캔 대조';
     if(robot.checkUntil>this.simTime)return '2차 검증 통과';
+    if(!robot.job&&STAGES[robot.stage].fixed){
+      const segment=Number(robot.id.slice(-1))-1;
+      const input=[...this.jobs.values()].some(job=>job.stage===robot.stage&&job.segment===segment&&!job.belt&&!job.auditHold);
+      return input?'상자 도착 · 인수 대기':'컨베이어 도착 대기';
+    }
+    if(robot.job&&STAGES[robot.stage].fixed&&robot.work>0){
+      const progress=robot.work/ARM_CYCLE_SECONDS;
+      return progress<.19?'집게 접근':progress<.77?'상자 집어 이동':'상자 내려놓음';
+    }
     if (!robot.job) return key(robot.cell)===key(robot.home)?'인계 대기':'복귀 중';
     if (!robot.next && key(robot.cell)!==key(robot.target)) return '통행 대기';
     return robot.fetching?'인수 중':`${STAGES[robot.stage].label} 중`;
@@ -435,7 +467,7 @@ export class Warehouse {
       }
       if (!clearing&&!robot.job && !robot.next && key(robot.cell)===key(robot.home)) {
         for (const job of this.jobs.values()) {
-          if (job.robot || job.belt || job.auditHold || (STAGES[robot.stage].fixed && job.segment!==Number(robot.id.slice(-1))-1) || job.stage!==robot.stage || (!this.backup.has(job.id)&&this.mode==='offline') || !this.canHandoff(job)) continue;
+          if (job.robot || job.belt || job.auditHold || (STAGES[robot.stage].fixed && job.segment!==Number(robot.id.slice(-1))-1) || job.stage!==robot.stage || (!this.backup.has(job.id)&&this.mode==='offline') || !this.armInputReady(job) || !this.canHandoff(job)) continue;
           const pickup = this.pickupFor(robot.stage,job);
           const goal = this.goalFor(robot.stage,job);
           const points=pickup?[pickup,goal]:[goal];
@@ -478,6 +510,10 @@ export class Warehouse {
         const belt=BELTS.find(b=>b.stage===job.stage&&b.segment===job.segment);
         const beltOccupied=belt&&[...this.jobs.values()].some(other=>other.belt?.id===belt.id);
         if (STAGES[robot.stage].fixed && beltOccupied) continue;
+        if(STAGES[robot.stage].fixed&&robot.work===0){
+          this.traceArmHandoff({kind:'pickup',id:job.id,robot:robot.id,beltId:job.armArrival.beltId});
+          this.note(robot.id,`${job.id} · ${job.armArrival.beltId} 도착 확인 후 로봇팔 인수`);
+        }
         robot.work += dt;
         if (robot.work < (STAGES[robot.stage].fixed?ARM_CYCLE_SECONDS:1.0)) continue;
         if (robot.fetching) {
@@ -485,6 +521,10 @@ export class Warehouse {
           robot.target = this.goalFor(robot.stage,job);
           robot.work = 0;
           continue;
+        }
+        if(STAGES[robot.stage].fixed){
+          this.traceArmHandoff({kind:'placed',id:job.id,robot:robot.id,beltId:belt?.id});
+          job.armArrival=null;
         }
         if(belt){
           if(beltOccupied)continue;
@@ -604,7 +644,16 @@ export class Warehouse {
       const lease=this.conveyorLeases.get(belt.id);
       if(this.mode==='offline'&&!covers(lease,job.id,this.epoch,now,Math.ceil((1-belt.progress)*4500)))continue;
       belt.progress=Math.min(1,belt.progress+dt/4.5);
-      if(belt.progress===1){this.completeStage(job,{id:belt.id,predecessor:belt.actor},belt.to);job.belt=null;}
+      if(job.id===this.armTraceId&&belt.progress>=.16&&belt.progress<1&&this.armHandoff?.kind==='placed'){
+        this.traceArmHandoff({kind:'transit',id:job.id,beltId:belt.id});
+      }
+      if(belt.progress===1){
+        this.completeStage(job,{id:belt.id,predecessor:belt.actor},belt.to);
+        job.belt=null;
+        job.armArrival={beltId:belt.id,readyAt:this.simTime+ARM_ARRIVAL_WAIT};
+        this.traceArmHandoff({kind:'arrival',id:job.id,beltId:belt.id});
+        this.note(belt.id,`${job.id} · 컨베이어 끝 도착 · 로봇팔 인수 대기`);
+      }
     }
   }
   advanceRobot(robot,dt,occupied) {

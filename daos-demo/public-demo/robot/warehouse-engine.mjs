@@ -94,31 +94,28 @@ export class Warehouse {
     this.synced = 0;
     this.resetFleet();
     for(const robot of this.robots)this.edges[zoneOf(robot.cell)].reservations.set(key(robot.cell),robot.id);
-    const opening = compact?[[2,5],[3,0],[3,5],[3,2],[3,0]]:[[38,5],[5,0],[4,5],[3,2],[4,0]];
+    const opening = compact?[[5,0]]:[[38,5],[5,0],[4,5],[3,2],[4,0]];
+    const demoDocks=[0,2,1,0,1];
     for (const [stage,[count,start]] of opening.entries()) {
       for (let i=0; i<count; i++) {
         const id=`${BATCH}-${String(this.jobs.size+1).padStart(2,'0')}`;
-        const position=(i+start)%9;
-        const job={id,stage,segment:position%3,lane:0,robot:null,barcode:id,quantity:1,dock:position%3+1};
+        const segment=compact?demoDocks[i]:(i+start)%3;
+        const job={id,stage,segment,lane:0,robot:null,barcode:id,quantity:1,dock:segment+1};
         this.jobs.set(id,job);
-        this.physicalScans.set(id,{stage,location:null,barcode:id,quantity:1,dock:position%3+1});
-        this.handoffRecords.set(id,{stage,actor:'입고 확인',location:null,barcode:id,quantity:1,dock:position%3+1});
+        this.physicalScans.set(id,{stage,location:null,barcode:id,quantity:1,dock:segment+1});
+        this.handoffRecords.set(id,{stage,actor:'입고 확인',location:null,barcode:id,quantity:1,dock:segment+1});
         if(STAGES[stage].fixed){
           const belt=BELTS.find(item=>item.stage===stage-1&&item.segment===job.segment);
-          if(compact){
-            // The opening boxes are visibly in transit, not waiting invisibly inside an arm.
-            job.stage--;
-            this.physicalScans.get(id).stage=job.stage;
-            this.handoffRecords.get(id).stage=job.stage;
-            job.belt={...belt,progress:0,actor:belt.id};
-            if(belt.stage===1&&this.armTraceId===null)this.armTraceId=job.id;
-          }else{
-            job.armArrival={beltId:belt.id,readyAt:0};
-          }
+          job.armArrival={beltId:belt.id,readyAt:0};
         }
       }
     }
-    this.note('관제',`출고 배치 ${BATCH} · 상자 ${this.jobs.size}개, 진행 중인 공정부터 이어서 작업합니다.`);
+    if(compact){
+      const first=this.jobs.values().next().value;
+      this.armTraceId=first.id;
+      this.armHandoff={kind:'unload',id:first.id};
+    }
+    this.note('관제',`출고 배치 ${BATCH} · 상자 ${this.jobs.size}개 · ${compact?'입고 도크에서 하차부터 시작합니다.':'진행 중인 공정부터 이어서 작업합니다.'}`);
     this.maintainBackup(now);
   }
   resetFleet() {
@@ -532,6 +529,8 @@ export class Warehouse {
         if (robot.work < (STAGES[robot.stage].fixed?ARM_CYCLE_SECONDS:1.0)) continue;
         if (robot.fetching) {
           robot.fetching = false;
+          if(robot.stage===0)this.traceArmHandoff({kind:'unload',id:job.id,robot:robot.id});
+          if(robot.stage===1)this.traceArmHandoff({kind:'transport',id:job.id,robot:robot.id});
           robot.target = this.goalFor(robot.stage,job);
           robot.work = 0;
           continue;
@@ -543,7 +542,11 @@ export class Warehouse {
         if(belt){
           if(beltOccupied)continue;
           job.belt={...belt,progress:0,actor:robot.id};
-        }else this.completeStage(job,robot,robot.cell);
+          if(robot.stage===1)this.traceArmHandoff({kind:'transit',id:job.id,beltId:belt.id,robot:robot.id});
+        }else{
+          this.completeStage(job,robot,robot.cell);
+          if(robot.stage===0)this.traceArmHandoff({kind:'transport',id:job.id});
+        }
         robot.done++;
         const next = STAGES[job.stage]?.label;
         this.note(robot.id,`${job.id} · ${belt?`${belt.id} 컨베이어 투입`:next?`${STAGES[robot.stage].label} 완료 → ${next} 인계`:'트럭 상차 완료'}`,this.mode==='offline'&&!belt);

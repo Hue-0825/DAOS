@@ -1,4 +1,4 @@
-import {PARKING,RACKS,SIZE,STAGES,BELTS,inFloor,ARM_CYCLE_SECONDS} from './warehouse-engine.mjs?v=24';
+import {PARKING,RACKS,SIZE,STAGES,BELTS,inFloor,ARM_CYCLE_SECONDS} from './warehouse-engine.mjs?v=25';
 
 const W=1320,H=700;
 const project=(x,y,z=0)=>[540+(x-y)*20,69+(x+y)*10.7-z];

@@ -1,5 +1,5 @@
-import {BATCH,STAGES,Warehouse,BACKUP_LIFETIME_MS} from './warehouse-engine.mjs?v=24';
-import {createScene} from './warehouse-scene.mjs?v=27';
+import {BATCH,STAGES,Warehouse,BACKUP_LIFETIME_MS} from './warehouse-engine.mjs?v=25';
+import {createScene} from './warehouse-scene.mjs?v=28';
 
 const $=id=>document.getElementById(id);
 const canvas=$('warehouse');
@@ -233,7 +233,9 @@ function paint(){
   }
   if(handoff){
     const label={
-      transit:`${handoff.beltId} · 이송 중, 로봇팔 대기`,
+      unload:handoff.robot?`${handoff.robot} · 입고 상자를 하차해 인계대로 이동`:'입고 도크 · 하차 로봇 대기',
+      transport:handoff.robot?`${handoff.robot} · 상자를 받아 컨베이어로 운반`:'입고 인계대 · 운반 로봇 인수 대기',
+      transit:handoff.robot?`${handoff.robot} 인계 → ${handoff.beltId} 이송 · 로봇팔 대기`:`${handoff.beltId} · 이송 중, 로봇팔 대기`,
       arrival:`${handoff.beltId} · 끝 지점 도착, 인수 대기`,
       pickup:`${handoff.robot} · 도착 및 스캔 확인 후 인수`,
       placed:handoff.beltId?`${handoff.robot} · ${handoff.beltId}에 내려놓음`:`${handoff.robot} · 팔레트에 내려놓음`,

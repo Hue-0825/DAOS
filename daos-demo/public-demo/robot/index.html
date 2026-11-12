@@ -6,7 +6,7 @@
   <meta name="robots" content="noindex,nofollow">
   <title>DAOS 물류 로봇 및 현장 시뮬레이터</title>
   <link rel="stylesheet" href="warehouse.css?v=24">
-  <script type="module" src="warehouse-view.mjs?v=31"></script>
+  <script type="module" src="warehouse-view.mjs?v=32"></script>
 </head>
 <body class="robot-lab">
   <header class="topbar"><a class="wordmark" href="https://daos-logistics.ryker6365.chatgpt.site/"><b>DAOS</b><span> / 물류 현장 시뮬레이터</span></a><div class="top-actions"><a href="/project.html">시스템 설명 ↗</a><span id="mode" class="server-state" role="status">시연 서버 연결됨</span></div></header>
@@ -31,14 +31,16 @@
       </div>
       <div class="canvas-wrap"><canvas id="warehouse" width="1320" height="700" aria-label="물류센터의 트럭, 선반, 공유 통로와 역할별 로봇 18대"></canvas></div>
       <div id="legend" class="map-key"></div>
-      <section class="arm-flow" aria-label="컨베이어와 로봇팔 인계">
+      <section class="arm-flow" aria-label="하차부터 로봇팔 인계까지">
         <ol id="arm-flow-stages">
-          <li data-step="transit">1. 컨베이어 이송</li>
-          <li data-step="arrival">2. 도착 확인</li>
-          <li data-step="pickup">3. 로봇팔 인수</li>
-          <li data-step="placed">4. 내려놓기</li>
+          <li data-step="unload">1. 하차</li>
+          <li data-step="transport">2. 운반 로봇</li>
+          <li data-step="transit">3. 컨베이어 이송</li>
+          <li data-step="arrival">4. 도착 확인</li>
+          <li data-step="pickup">5. 로봇팔 인수</li>
+          <li data-step="placed">6. 내려놓기</li>
         </ol>
-        <p id="arm-flow-detail">상자가 도착할 때까지 로봇팔이 대기합니다.</p>
+        <p id="arm-flow-detail">입고 도크에서 하차 로봇이 상자를 인수합니다.</p>
       </section>
       <section class="operations-overview" aria-labelledby="overview-title">
         <div class="panel-head">
@@ -93,8 +95,8 @@
         </div>
         <div class="overview-progress">
           <div><span>출고 진행률</span><strong id="shipment-percent">0%</strong></div>
-          <progress id="shipment-progress" value="0" max="14" aria-label="출고 진행률"></progress>
-          <p id="shipment-count">0 / 14개 상차 완료</p>
+          <progress id="shipment-progress" value="0" max="5" aria-label="출고 진행률"></progress>
+          <p id="shipment-count">0 / 5개 상차 완료</p>
         </div>
       </div>
       <ul class="timeline-key"><li data-mode="online">정상</li><li data-mode="outage">장애·대기</li><li data-mode="backup">DAOS</li><li data-mode="recovering">복구 전환</li></ul>

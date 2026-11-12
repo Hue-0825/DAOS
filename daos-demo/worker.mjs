@@ -294,15 +294,19 @@ async function intakeApi(request, db, path) {
       return json({error:'해당 허브에 전송된 배송 권역만 배차할 수 있습니다.'},400);
     }
     const segment=routedSegment??route.segment;
-    const [insert] = await db.batch([
-      run(db,`INSERT OR IGNORE INTO orders (id,work_date,segment,title,cargo,destination,instructions,revision,province)
+    const eligible=`intake.province=? AND intake.work_date=? AND intake.region=? AND intake.segment=?
+      AND intake.destination IS NOT NULL AND ${released('intake.work_date')}
+      AND NOT EXISTS (SELECT 1 FROM orders WHERE orders.id=intake.id)`;
+    const args=[province,date,region,segment];
+    // Both statements use the same eligible set inside one D1 batch transaction.
+    const [,insert] = await db.batch([
+      run(db,`UPDATE control SET revision=revision+1 WHERE id=1 AND online=1
+        AND EXISTS (SELECT 1 FROM intake WHERE ${eligible})`,...args),
+      run(db,`INSERT INTO orders (id,work_date,segment,title,cargo,destination,instructions,revision,province)
         SELECT intake.id,intake.work_date,intake.segment,intake.product,intake.quantity || '개',intake.destination,
           intake.address || CASE WHEN intake.instructions <> '' THEN ' · ' || intake.instructions ELSE '' END,
-          (SELECT revision + 1 FROM control WHERE id = 1),intake.province
-        FROM intake WHERE province = ? AND work_date = ? AND region = ? AND segment = ? AND destination IS NOT NULL
-        AND ${released('intake.work_date')}`,province,date,region,segment),
-      run(db,`UPDATE control SET revision = revision + 1 WHERE id = 1
-        AND EXISTS (SELECT 1 FROM orders WHERE orders.revision = control.revision + 1)`),
+          (SELECT revision FROM control WHERE id=1),intake.province
+        FROM intake WHERE ${guard} AND ${eligible}`,...args),
     ]);
     return insert.meta.changes ? json({count:insert.meta.changes}) : json({error:'허브에 전송된 배차 대기 주문이 없습니다.'},409);
   }
@@ -427,10 +431,8 @@ async function api(request, db, path) {
           province,event.date,event.state,event.key.slice(11),event.state,Number(event.key.slice(-1))||0,event.state,sessionMode,event.state,sessionMode)),
         run(db,controlSql),
         ...events.map(event=>run(db,`SELECT 1 FROM events AS saved
-          WHERE saved.mode=? AND saved.job_key=? AND saved.state=? AND ${fresh}
-          AND NOT EXISTS (SELECT 1 FROM events AS reused WHERE reused.id=? AND
-            (reused.mode<>saved.mode OR reused.job_key<>saved.job_key OR reused.state<>saved.state))`,
-          sessionMode,event.key,event.state,epoch(event),province,event.date,event.id)),
+          WHERE saved.id=? AND saved.mode=? AND saved.job_key=? AND saved.state=? AND ${fresh}`,
+          event.id,sessionMode,event.key,event.state,epoch(event),province,event.date)),
       ]);
       if(!results[events.length].results[0].online)return json({error:'메인 서버 연결 끊김'},503);
       const acknowledged=[],unverified=[];
@@ -503,7 +505,7 @@ export default {
       }
       const origin = request.headers.get('Origin');
       if (request.method === 'POST' && origin && origin !== new URL(request.url).origin) return json({error:'다른 사이트에서 변경할 수 없습니다.'},403);
-      try { return await api(request, env.DB, pathname); }
+      try { return await calendarApi(request, env.DB, pathname, api); }
       catch (error) {
         console.error(error);
         return json({ error:'서버에서 요청을 처리하지 못했습니다.' },500);
@@ -513,7 +515,7 @@ export default {
     if (hostedSplit && /^\/ops\/?$/.test(pathname) && env.DAOS_HUB_URL) return Response.redirect(env.DAOS_HUB_URL,302);
     if (hostedSplit && /^\/driver\/?$/.test(pathname) && env.DAOS_DRIVER_URL) return Response.redirect(new URL('/driver/',env.DAOS_DRIVER_URL),302);
     if (split && !['/','/central/'].includes(pathname) && !pathname.startsWith('/central/')) return new Response('Not found',{status:404});
-    if (pathname === '/' && split) return Response.redirect(new URL('/central/',request.url),302);
+    if (pathname === '/' || (!hostedSplit && /^\/ops\/?$/.test(pathname))) return Response.redirect(new URL('/central/',request.url),302);
     if (pathname === '/ops' || pathname === '/driver') return Response.redirect(new URL(`${pathname}/`,request.url),302);
     const path = pathname === '/' || pathname === '/ops/' ? '/ops/index.html'
       : pathname === '/driver/' ? '/driver/index.html' : pathname === '/central/' ? '/central/index.html' : pathname;

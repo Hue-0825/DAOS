@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>운영 사이트 접속 | DAOS</title>
+  <meta name="description" content="DAOS의 스토어, 메인 관제센터, 지역 허브, 기사 앱 접속 페이지입니다.">
+  <link rel="canonical" href="https://daos-logistics.ryker6365.chatgpt.site/operations.html">
+  <link rel="stylesheet" href="/style.css?v=12">
+</head>
+<body class="contest operations">
+  <header class="topbar"><div class="shell bar"><a class="brand" href="/">DAOS <span>운영 사이트</span></a><nav aria-label="운영 사이트 메뉴"><a href="/project.html">시스템 설명</a><a href="/papers.html">논문 자료실</a><!-- DAOS_ACCESS --></nav></div></header>
+  <main class="shell">
+    <header class="paper-intro operations-intro">
+      <p class="eyebrow">운영 사이트 접속</p><h1>주문·배차·배송</h1>
+      <p class="lead">스토어에서 접수한 주문이 메인 관제센터와 지역 허브를 거쳐 기사 앱에 전달됩니다.</p>
+    </header>
+    <section class="exhibit-section" id="systems" aria-labelledby="systems-title">
+      <header class="section-heading"><p class="eyebrow">배송 흐름</p><h2 id="systems-title">역할별 운영 화면</h2></header>
+      <ol class="system-rail">
+        <li><span class="number">01</span><div><h3>스토어</h3><span class="device-label">주문 웹</span><p>상품과 배송지를 선택해 주문합니다.</p></div><a href="/open/shop">스토어 열기 ↗</a></li>
+        <li><span class="number">02</span><div><h3>메인 관제센터</h3><span class="device-label">PC 운영 웹</span><p>주문을 지역 허브에 보내고, 기사 시연의 서버 연결과 시간을 제어합니다.</p></div><a href="/open/central">관제센터 열기 ↗</a></li>
+        <li><span class="number">03</span><div><h3>지역 허브</h3><span class="device-label">PC 운영 웹</span><p>배송일과 시간대별로 기사에게 배차합니다.</p></div><a href="/open/hub">지역 허브 열기 ↗</a></li>
+        <li><span class="number">04</span><div><h3>기사 앱</h3><span class="device-label">모바일</span><p>기기에 저장된 작업표를 열고, 배송 완료를 기록합니다.</p></div><a href="/open/driver">기사 앱 열기 ↗</a></li>
+      </ol>
+      <p class="access"><a href="/open/robot">로봇 관제실 열기 ↗</a></p>
+      <p class="access">운영 화면은 통합 사이트에서 ChatGPT 로그인과 시연 비밀번호를 한 번 확인하면 열 수 있습니다.</p>
+      <details class="technical-note"><summary>기사 앱의 장애 대응 시연 순서</summary><p>메인 관제센터에서 배송일과 시각을 맞추고, 지역 허브에서 해당 시간대의 배차를 확정합니다. 기사 앱에 작업표가 들어온 것을 확인한 뒤 메인 관제센터에서 연결을 끊습니다. 기사 앱에서 저장된 작업을 완료하고, 연결을 복구한 뒤 미동기화 건수가 줄어드는지 확인합니다.</p></details>
+    </section>
+  </main>
+  <footer class="shell bar"><span>DAOS · 운영 사이트 접속</span><a href="/project.html">시스템 설명 ↗</a></footer>
+</body>
+</html>

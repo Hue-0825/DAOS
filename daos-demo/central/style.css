@@ -61,3 +61,8 @@ td strong{overflow-wrap:anywhere}
 .service-nav a{display:inline-flex;align-items:center;min-height:38px;padding:7px 11px;border:1px solid #dad3ef;border-radius:8px;color:var(--accent);background:#fff;font-size:13px;font-weight:750;text-decoration:none}
 .service-nav a:hover,.service-nav a:focus-visible{background:#f1edff}
 .service-nav a[aria-current=page]{background:#eeeaf8;color:#433670;border-color:#eeeaf8}
+
+.central-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.central-kpis div{display:grid;gap:4px}
+.central-kpis span{font-size:12px;color:#55536a}
+.central-kpis strong{font-size:21px;font-variant-numeric:tabular-nums}

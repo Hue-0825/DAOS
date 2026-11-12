@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 348" role="img" aria-labelledby="title desc">
+<title id="title">중앙 연결이 끊긴 물류센터</title><desc id="desc">중앙 서버와의 링크가 끊겨도 현장 장치에 저장한 작업표로 입고 상자를 분류하고 출고한다.</desc>
+<defs>
+  <pattern id="grid" width="21" height="21" patternUnits="userSpaceOnUse"><path d="M21 0H0V21" fill="none" stroke="#34314f" stroke-width="1"/></pattern>
+  <marker id="tip" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#b8a6f4"/></marker>
+  <g id="rack"><rect width="96" height="31" rx="2" fill="#34324f" stroke="#746c99"/><path d="M32 0v31M64 0v31" stroke="#746c99"/><path d="M7 8h17v15H7zm32 0h17v15H39zm32 0h17v15H71z" fill="#a98253"/></g>
+</defs>
+<rect width="600" height="348" fill="#191733"/><rect x="18" y="16" width="564" height="314" fill="url(#grid)" stroke="#4c456a"/>
+<g font-family="system-ui,sans-serif">
+  <text x="37" y="45" font-size="12" font-weight="700" letter-spacing="2" fill="#bab3d8">DAOS / WAREHOUSE 01</text>
+  <rect x="386" y="28" width="174" height="28" rx="3" fill="#422e28" stroke="#a27560"/>
+  <text x="473" y="47" font-size="13" font-weight="700" text-anchor="middle" fill="#ffd2bc">중앙 서버 연결 끊김</text>
+  <path d="M473 56V72M473 91V108H355" fill="none" stroke="#cc8b6d" stroke-width="2" stroke-dasharray="4 4"/>
+  <path d="m468 76 10 10m0-10-10 10" stroke="#efae8d" stroke-width="2"/>
+  <rect x="221" y="85" width="134" height="43" rx="3" fill="#473679" stroke="#a894ed"/>
+  <text x="288" y="112" fill="#f0eaff" font-size="15" font-weight="750" text-anchor="middle">현장 백업 작업표</text>
+  <path d="M288 128V169M109 216H151V266H445V216H494" fill="none" stroke="#b8a6f4" stroke-width="3" stroke-dasharray="6 4" marker-end="url(#tip)"/>
+  <use href="#rack" x="182" y="179"/><use href="#rack" x="322" y="179"/><use href="#rack" x="182" y="221"/><use href="#rack" x="322" y="221"/>
+  <g fill="#2b2947" stroke="#8b80ad"><rect x="40" y="178" width="69" height="76" rx="3"/><rect x="495" y="178" width="65" height="76" rx="3"/></g>
+  <g fill="#d2a16f"><path d="M52 199h18v15H52zm22 0h18v15H74zm-22 19h18v15H52z"/><path d="M507 200h21v17h-21zm23 0h17v17h-17zm-23 19h21v14h-21z"/></g>
+  <g transform="translate(288 265)"><rect x="-19" y="-11" width="38" height="24" rx="4" fill="#a18adf" stroke="#ddd1ff"/><rect x="-8" y="-7" width="16" height="16" rx="2" fill="#b88856"/><path d="M12 -5v11" stroke="#30264e" stroke-width="2"/></g>
+  <g font-size="15" font-weight="700" text-anchor="middle" fill="#eee9fb"><text x="74" y="298">입고</text><text x="288" y="310">운반·분류</text><text x="528" y="298">출고</text></g>
+</g>
+</svg>

@@ -3,193 +3,152 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DAOS 프로젝트 소개 및 기술 검증</title>
-<meta name="description" content="DAOS의 주문·배차·배송·로봇 시연, 단절 운영과 복구 검증 원리, 논문과 표준 검토 결과를 설명합니다.">
-<link rel="stylesheet" href="/style.css?v=7">
+<title>DAOS 시스템 설명 | 스마트 물류 경진대회</title>
+<link rel="canonical" href="https://daos-logistics.ryker6365.chatgpt.site/project.html">
+<meta name="description" content="DAOS의 장애 대응을 물류 현장의 사례, 3계층 구조도, 검증 계획으로 설명합니다.">
+<link rel="stylesheet" href="/style.css?v=13">
 </head>
-<body>
-<header class="topbar"><div class="shell bar"><a class="brand" href="/">DAOS <span>스마트 물류</span></a><nav aria-label="프로젝트 메뉴"><a href="#flow">작동 방식</a><a href="#architecture">3계층 구조</a><a href="#evidence">기술 검증</a><a href="#test">실험과 비용</a><a href="/#systems">시연 열기 ↗</a></nav></div></header>
-<main class="shell project">
-<section class="hero" aria-labelledby="project-title">
-  <div><p class="eyebrow">프로젝트 소개 · 기술 검증</p><h1 id="project-title">DAOS 분산 자율운영 시스템</h1>
-  <p class="lead">서버 연결이 끊기면 기사와 로봇은 미리 받은 작업으로 업무를 이어갑니다. 연결이 돌아오면 서버 기록과 현장 기록을 대조합니다.</p></div>
-  <aside class="overview" aria-label="시연 구성"><div><span>배송 운영</span><strong>주문 → 배송</strong><p>스토어, 메인, 허브, 기사 앱</p></div><div><span>현장 운영</span><strong>로봇 18대</strong><p>상자 14개를 약 1분간 처리하는 시뮬레이션</p></div></aside>
-</section>
-<section class="section" id="flow"><p class="eyebrow">01 / 전체 구조</p><h2>주문은 이렇게 배송으로 이어집니다</h2>
-  <ol class="scenario">
-    <li><strong>스토어</strong><p>주문을 접수합니다. 같은 요청을 다시 보내면 처음 받은 접수 번호를 돌려줍니다.</p></li>
-    <li><strong>메인 관제센터</strong><p>주문을 지역별로 모아 허브에 보냅니다. 시연 시간과 기사 서버 연결을 제어합니다.</p></li>
-    <li><strong>지역 허브</strong><p>시·도와 시간대별로 배차합니다. 기사 기기에 최신 작업표가 저장됐는지 확인합니다.</p></li>
-    <li><strong>기사 앱</strong><p>당일과 다음 날 작업표를 받아 둡니다. 배송 결과는 서버가 접수를 확인할 때까지 기기에 보관합니다.</p></li>
-  </ol>
-  <div class="card project-block">
-    <h3>별도 로봇 관제실</h3>
-    <p>로봇 18대와 컨베이어 6대가 상자 14개를 약 1분 동안 처리합니다. 원형 타임라인과 운영 이벤트에서 장애 및 복구 구간을 확인할 수 있습니다.</p>
-    <ul class="reading-list">
-      <li><strong>정상 운전</strong> 선행 공정이 끝났는지, 이동할 칸이 비어 있는지 확인합니다.</li>
-      <li><strong>연결 끊김</strong> 약 1초간 대기하며 운전을 전환합니다. DAOS가 켜져 있고 백업이 유효하면 운행을 재개합니다.</li>
-      <li><strong>연결 복구</strong> 장애 직전의 중앙 기록, 현장 인계 기록, 가상 스캔을 대조합니다. 기록이 다르면 해당 상자를 보류합니다.</li>
-    </ul>
-    <div class="actions"><a class="secondary" href="/open/robot">로봇 관제실 열기 ↗</a></div>
-  </div>
-</section>
-<section class="section" id="architecture">
-  <p class="eyebrow">보고서 2.2 · 그림 1</p><h2>DAOS 3계층 구조</h2>
-  <p class="section-intro">중앙이 작업과 권한을 먼저 내려보냅니다. 장애 중에는 엣지와 로봇이 승인된 범위에서 일하고, 복구 뒤에는 기록을 다시 중앙으로 올립니다.</p>
-  <ol class="architecture">
-    <li><h3>01 중앙</h3>
-      <ul class="reading-list">
-        <li><strong>WMS · FMS/MCS</strong> 주문과 재고를 작업으로 바꾸고 로봇을 배정하며 경로를 계획합니다.</li>
-        <li><strong>점유권 위임 관리자</strong> 작업과 공유 자원에 접근할 권한을 로봇별로 미리 발급합니다. 각 권한에는 만료시간과 운전 세대가 붙습니다.</li>
-        <li><strong>복구 대조 엔진</strong> 서버 기록, 로봇·엣지 로그, 실물 위치 증거를 확인해 상태를 확정하고 새 운전 세대를 발급합니다.</li>
-      </ul>
-    </li>
-    <li><h3>02 구역 엣지</h3>
-      <ul class="reading-list">
-        <li><strong>구역 게이트웨이</strong> 보고서는 소형 PC에서 MQTT 중계, 로그 복제, 시각 동기화를 맡기는 구조를 제안합니다.</li>
-        <li><strong>실물 위치 증거</strong> 로봇 하부 카메라로 랙·바닥 코드를 읽고, 필요한 경우 작업자가 PDA로 확인합니다.</li>
-      </ul>
-    </li>
-    <li><h3>03 로봇</h3>
-      <ul class="reading-list">
-        <li><strong>실행 판단</strong> 선행 공정이 끝났는지, 사용할 자원과 권한의 유효시간이 충분한지 확인합니다. 보고서에서는 이 판단에 작업 의존성·자원 그래프(DRG)를 사용합니다.</li>
-        <li><strong>로컬 로그와 협상</strong> 작업 결과를 기기에 기록합니다. 추가 점유가 필요하면 같은 구역에서 이웃 로봇과 조정합니다.</li>
-      </ul>
-    </li>
-  </ol>
-  <div class="card project-block"><h3>현재 웹에서 볼 수 있는 동작</h3>
-    <ul class="reading-list">
-      <li><strong>정상</strong> 중앙 역할이 로봇별 공정과 구역 권한을 발급합니다. 시연에서 권한 유효시간은 마지막 갱신부터 45초입니다.</li>
-      <li><strong>장애</strong> 약 1초 동안 전환을 확인합니다. 로봇이 다음 공정과 권한을 확인하면 입고·공유 통로·출고 엣지가 이동 칸을 예약합니다.</li>
-      <li><strong>복구</strong> 중앙은 장애 직전 상태, 로봇 로그와 엣지 복제본, 가상 위치 증거를 대조합니다. 대조 뒤 새 운전 세대를 발급합니다.</li>
-    </ul>
-    <p>세 계층은 한 브라우저에서 시연합니다. 실제 MQTT 브로커, 로봇 간 직접 통신, 시각 동기화와 카메라·PDA 스캔은 현장 실증 범위입니다.</p>
-    <p class="source-links"><a href="https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html">MQTT 공식 규격</a> · <a href="https://www.iso.org/standard/83545.html">무인 산업차량 안전 요구사항</a></p>
-  </div>
-</section>
-<section class="section" id="evidence"><p class="eyebrow">02 / 원문 교차 검증</p><h2>기술 근거와 DAOS 적용 범위</h2>
-  <p class="section-intro">각 문헌이 설명하는 기술과 현재 시연에서 확인할 수 있는 범위를 정리했습니다.</p>
-  <section class="evidence-group">
-    <h3>작업표를 미리 저장하는 기술</h3>
-    <div class="evidence-list">
-      <article class="evidence-entry">
-        <header><h4>Coda</h4><p class="evidence-meta">Kistler·Satyanarayanan · 1992</p></header>
-        <div><h5>원문에서 확인한 내용</h5><p>필요한 파일을 미리 저장하고, 연결이 돌아오면 단절 중 변경 사항을 합칩니다.</p></div>
-        <div><h5>DAOS 적용 범위</h5><p>기사 앱은 서버가 승인한 작업표를 미리 저장합니다. 배송 기록은 복구 뒤에 다시 보냅니다.</p></div>
-        <p class="evidence-links"><a href="https://www.cs.cmu.edu/~satya/docdir/kistler-tocs-coda-1992.pdf">저자 원문</a></p>
-      </article>
-      <article class="evidence-entry">
-        <header><h4>Local-first</h4><p class="evidence-meta">Kleppmann 외 · 2019</p></header>
-        <div><h5>원문에서 확인한 내용</h5><p>연결 없이도 기기에서 작업하고, 여러 기기에서 협업하는 설계 원칙을 제안합니다.</p></div>
-        <div><h5>DAOS 적용 범위</h5><p>기사 앱은 기기에 배송 기록을 남깁니다. 배차 승인과 완료 확정은 메인 서버가 맡습니다.</p></div>
-        <p class="evidence-links"><a href="https://martin.kleppmann.com/papers/local-first.pdf">저자 원문</a></p>
-      </article>
-      <article class="evidence-entry">
-        <header><h4>SessionStore</h4><p class="evidence-meta">Mortazavi 외 · 2020</p></header>
-        <div><h5>원문에서 확인한 내용</h5><p>사용자가 현장 서버를 옮겨도 자신이 쓴 데이터와 이전에 읽은 버전보다 오래되지 않은 기록을 볼 수 있도록 설계했습니다.</p></div>
-        <div><h5>DAOS 적용 범위</h5><p>현장 서버에 데이터를 배치할 때 참고합니다. 중앙과 완전히 끊겼을 때의 로봇 운영은 별도 시험이 필요합니다.</p></div>
-        <p class="evidence-links"><a href="https://www.cs.toronto.edu/~mortazavi/papers/Sessionstore_Mortazavi.pdf">저자 원문</a></p>
-      </article>
-    </div>
-  </section>
-  <section class="evidence-group">
-    <h3>복구 후 기록을 확인하는 기술</h3>
-    <div class="evidence-list">
-      <article class="evidence-entry">
-        <header><h4>CRDT</h4><p class="evidence-meta">Almeida · 2024년 저널 게재</p></header>
-        <div><h5>원문에서 확인한 내용</h5><p>여러 기기가 따로 수정한 데이터가 같은 상태로 모이도록 설계하는 방법입니다. 2023년에 초고가 공개됐습니다.</p></div>
-        <div><h5>DAOS 적용 범위</h5><p>배차와 통로 사용 권한은 업무 규칙을 먼저 확인해야 합니다. 시연에서는 자동으로 합치지 않습니다.</p></div>
-        <p class="evidence-links"><a href="https://repositorio.inesctec.pt/server/api/core/bitstreams/d83841fa-9642-4162-aca9-50a7ae7b18e3/content">기관 저장소 원문</a></p>
-      </article>
-      <article class="evidence-entry">
-        <header><h4>Bayou</h4><p class="evidence-meta">Terry 외 · 1995</p></header>
-        <div><h5>원문에서 확인한 내용</h5><p>오프라인 변경을 임시로 기록합니다. 재연결 뒤 선행 조건을 확인하고 변경을 확정합니다.</p></div>
-        <div><h5>DAOS 적용 범위</h5><p>메인 서버가 집하 → 구간 출발 → 배송 완료 순서를 확인합니다.</p></div>
-        <p class="evidence-links"><a href="https://doi.org/10.1145/224056.224070">ACM 원문</a></p>
-      </article>
-      <article class="evidence-entry">
-        <header><h4>Dynamo</h4><p class="evidence-meta">DeCandia 외 · 2007</p></header>
-        <div><h5>원문에서 확인한 내용</h5><p>다른 노드가 데이터를 임시 보관하고, 머클 트리로 복제본에서 달라진 부분을 찾습니다.</p></div>
-        <div><h5>DAOS 적용 범위</h5><p>머클 트리는 저장된 데이터 비교에 씁니다. 로봇 시연은 실물 위치를 확인하는 과정을 가상 스캔으로 보여줍니다.</p></div>
-        <p class="evidence-links"><a href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf">저자 원문</a></p>
-      </article>
-      <article class="evidence-entry">
-        <header><h4>전송 대기열과 운전 세대</h4><p class="evidence-meta">Outbox · Chubby</p></header>
-        <div><h5>원문에서 확인한 내용</h5><p>Outbox는 전송할 기록을 남겨 재시도할 수 있게 합니다. Chubby는 오래된 권한을 식별하는 방법을 제시합니다.</p></div>
-        <div><h5>DAOS 적용 범위</h5><p>기사 앱은 서버가 확인한 기록만 전송 대기열에서 뺍니다. 서버는 이전 배차 버전을 거부하고, 로봇 시연은 운전 세대를 비교합니다.</p></div>
-        <p class="evidence-links"><a href="https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/transactional-outbox.html">AWS 설계 문서</a> · <a href="https://static.usenix.org/events/osdi06/tech/full_papers/burrows/burrows_html/index.html">Chubby 원문</a></p>
-      </article>
-    </div>
-  </section>
-  <section class="evidence-group">
-    <h3>로봇과 현장 서버를 연결하는 기술</h3>
-    <div class="evidence-list">
-      <article class="evidence-entry">
-        <header><h4>엣지 로봇</h4><p class="evidence-meta">Afrin 외 · 2019</p></header>
-        <div><h5>원문에서 확인한 내용</h5><p>로봇 작업을 처리할 계산 자원을 실행 시간, 에너지, 비용을 기준으로 배치합니다.</p></div>
-        <div><h5>DAOS 적용 범위</h5><p>현장 장비의 자원 배치에 참고합니다. 장애 중 지속 운전과 복구 검증은 별도의 실험 과제입니다.</p></div>
-        <p class="evidence-links"><a href="https://doi.org/10.1016/j.future.2019.02.062">원 논문</a></p>
-      </article>
-      <article class="evidence-entry">
-        <header><h4>VDA 5050</h4><p class="evidence-meta">공식 규격 · 3.0.0</p></header>
-        <div><h5>원문에서 확인한 내용</h5><p>로봇과 관제 간 메시지 형식을 정합니다. 승인된 이동 구간(Base)과 이후 계획(Horizon)을 구분합니다.</p></div>
-        <div><h5>DAOS 적용 범위</h5><p>미리 승인한 범위만 쓰는 로봇 시연에 참고했습니다. 실제 MQTT 통신과 장비 안전 검증은 후속 실증입니다.</p></div>
-        <p class="evidence-links"><a href="https://github.com/VDA5050/VDA5050/releases/tag/3.0.0">공식 규격 릴리스</a></p>
-      </article>
-    </div>
-  </section>
-  <div class="card project-block">
-    <h3>실물 장비에서 확인할 항목</h3>
-    <ul class="reading-list">
-      <li><strong>통로 사용 권한</strong> 두 로봇의 권한이 겹치지 않는지, 시계 오차나 연결 끊김이 있어도 만료를 확인하는지 검증합니다.</li>
-      <li><strong>장비 안전</strong> 장애물 감지, 긴급 정지, 구역 제어, 실제 스캐너 측정을 시험합니다.</li>
-      <li><strong>실험 도구</strong> ROS 2와 Gazebo로 장비 동작을, MAPF 창고 지도로 통로 배치를 비교할 수 있습니다.</li>
-    </ul>
-    <p class="source-links"><a href="https://gazebosim.org/docs/latest/ros_installation/">Gazebo와 ROS 조합</a> · <a href="https://movingai.com/benchmarks/mapf/">Moving AI 창고 지도</a> · <a href="https://cse.buffalo.edu/~demirbas/publications/hlc.pdf">하이브리드 논리 시계</a></p>
-  </div>
-  <div class="card project-block">
-    <h3>산업 사례에서 확인한 내용</h3>
-    <ul class="reading-list">
-      <li><strong>Ocado Erith</strong> 공식 발표에 따르면 로봇 세 대가 충돌해 화재가 발생했습니다. 발표문에는 중앙 서버의 장애 여부가 명시돼 있지 않습니다.</li>
-      <li><strong>Amazon·LG CNS</strong> 공개 자료는 로봇 이동 최적화와 여러 종류의 로봇 통합 운영을 설명합니다. 장애 대응 성능을 비교하려면 별도 자료가 필요합니다.</li>
-    </ul>
-    <p class="source-links"><a href="https://www.ocadogroup.com/newsroom/news/statement-regarding-incident-at-erith-customer-fulfilment-centre">Ocado 공식 발표</a> · <a href="https://www.amazon.science/blog/amazon-builds-first-foundation-model-for-multirobot-coordination">Amazon Science</a> · <a href="https://connect.lgcns.com/kr/service/rx/rx">LG CNS RX</a> · <a href="https://github.com/open-rmf/rmf">Open-RMF</a></p>
-  </div>
-</section>
-<section class="section" id="test"><p class="eyebrow">03 / 검증 계획</p><h2>같은 주문과 장애로 비교합니다</h2>
-  <ol class="scenario">
-   <li><strong>기준선</strong><p>주문, 로봇 배치, 장애 시점을 맞춰 DAOS OFF와 ON을 비교합니다.</p></li>
-   <li><strong>기사 앱</strong><p>배송을 기록한 뒤 다시 연결합니다. 재전송, 작업 순서 위반, 이전 배차 버전을 시험합니다.</p></li>
-   <li><strong>로봇 관제실</strong><p>연결을 끊고 약 1초 뒤 자율운전이 시작되는지 확인합니다. 백업 작업표의 만료와 복구 대조 결과도 확인합니다.</p></li>
-   <li><strong>계측</strong><p>장애 중 처리량과 정상화 시간을 비교합니다. 중복·누락, 보류, 통로 충돌 건수도 기록합니다.</p></li>
-  </ol>
-  <div class="card project-block">
-    <h3>30분 장애 한 번에 약 129만 원의 직접 손실 감소</h3>
-    <p>보고서 6장의 시나리오입니다. 센터는 시간당 2,000라인을 처리합니다. 기존 방식은 장애 중 0%, 복구 중 40%를 처리한다고 가정했습니다. DAOS는 장애 중 60%, 본문 표의 복구 구간에서는 70%를 적용했습니다.</p>
-    <dl class="reading-metrics">
-      <div><dt>장애 1회 처리 손실</dt><dd>1,800 → 450라인</dd></div>
-      <div><dt>긴급 대응비 절감</dt><dd>121.5만 원</dd></div>
-      <div><dt>수동 복구 인건비 절감</dt><dd>약 7.9만 원</dd></div>
+<body class="contest system-home">
+<header class="topbar"><div class="shell bar"><a class="brand" href="/">DAOS <span>스마트 물류</span></a><nav aria-label="주 메뉴"><a href="/">메인</a><a href="/project.html" aria-current="page">시스템 설명</a><a href="/papers.html">논문 자료실</a><span class="nav-divider" aria-hidden="true"></span><a class="nav-operation" href="/operations.html">운영 사이트 접속 ↗</a><a class="nav-robot" href="/open/robot">물류 현장 시뮬레이터 ↗</a></nav></div></header>
+<main class="shell">
+<section class="exhibit-hero exhibit-hero--guide" aria-labelledby="project-title">
+  <div class="hero-copy">
+    <p class="eyebrow">스마트 물류 경진대회 · 시스템 설명</p>
+    <h1 id="project-title">서버가 끊겨도 이어가는 물류</h1>
+    <p class="lead">DAOS는 현장에 필요한 정보를 미리 저장합니다. 연결이 끊겨도 받은 작업을 이어가고, 서버가 돌아오면 완료 기록을 맞춰 봅니다.</p>
+    <dl class="hero-scope">
+      <div><dt>창고 로봇</dt><dd>작업 순서와 시간 제한이 있는 통로 사용 권한을 받습니다.</dd></div>
+      <div><dt>배송 기사</dt><dd>배차된 배송지와 시간대를 기사 앱에 저장합니다.</dd></div>
     </dl>
-    <ul class="reading-list">
-      <li><strong>긴급 대응비</strong> 줄어든 1,350라인 × 긴급 대응 비율 30% × 라인당 3,000원입니다.</li>
-      <li><strong>인건비</strong> 기존 5명 × 40분에서 DAOS 적용 시 1명 × 10분을 빼고, 시간당 25,000원을 적용했습니다.</li>
-      <li><strong>그림 3을 적용하면</strong> 그림은 DAOS 복구 구간을 30%로 그렸습니다. 이 경우 약 517라인을 잃고, 직접 손실 감소액은 약 123.4만 원입니다.</li>
-    </ul>
+    <div class="actions"><a class="primary" href="#flow">작동 방식 보기 ↓</a><a class="secondary" href="#architecture">3계층 구조도 ↓</a></div>
   </div>
-  <div class="card project-block">
-    <h3>예상 운영비 월 약 2.3만 원</h3>
-    <p>보고서 5.4의 엣지 장비 2대 기준입니다. 중앙 VM 상한과 별도 전력 가정을 합산했습니다.</p>
-    <dl class="reading-metrics">
-      <div><dt>초기 장비 구입</dt><dd>약 40만 원</dd></div>
-      <div><dt>중앙 VM</dt><dd>월 2만 원 이하</dd></div>
-      <div><dt>전력 포함 예시</dt><dd>연 약 27.5만 원</dd></div>
+  <figure class="hero-plan"><img src="/floor-plan.svg?v=2" width="600" height="348" alt="중앙 연결이 끊긴 뒤 현장 작업표로 상자를 출고하는 물류센터"><figcaption>현장에 미리 저장해 둔 작업표가 장애 중에도 남습니다.</figcaption></figure>
+</section>
+<section class="exhibit-section" id="flow">
+  <header class="section-heading"><p class="eyebrow">01 / 정상 · 장애 · 복구</p><h2>상자 한 개를 따라가 봅니다</h2></header>
+  <ol class="brief-steps">
+    <li><span>01 / 미리 받기</span><strong>옮길 상자와 사용할 통로를 받습니다</strong><p>중앙이 상자 A-01-01의 이동 작업을 내려보냅니다. 통로 사용 권한에는 만료 시간이 붙습니다.</p></li>
+    <li><span>02 / 이어가기</span><strong>조건이 맞으면 운반을 계속합니다</strong><p>하차가 끝났고, 받은 권한이 유효하고, 다음 칸이 비어 있으면 상자를 옮깁니다. 조건이 모자라면 기다립니다.</p></li>
+    <li><span>03 / 확인하기</span><strong>상자가 도착했는지 대조합니다</strong><p>전환을 시작하며 설비가 멈춘 순간의 상자 위치를 메인 서버로 먼저 보냅니다. 중앙은 받은 위치를 장애 직전 기록과 현장 작업 이력에 맞춰 봅니다. 일치하면 처리한 지점부터 이어갑니다.</p></li>
+  </ol>
+  <p class="field-note"><strong>기사 앱도 같은 원리입니다.</strong> 지역 허브가 배차한 배송 정보를 기기에 저장합니다. 연결이 끊기면 저장된 작업표로 배송하고, 재연결 후 서버가 받은 기록만 전송 대기 목록에서 뺍니다. 창고 시연은 별도의 가상 작업표를 사용하며 메인 관제센터의 서버 연결 상태를 읽습니다. 로봇 화면의 장애 버튼은 창고 시연에 적용됩니다.</p>
+</section>
+<section class="exhibit-section" id="architecture">
+  <header class="section-heading"><p class="eyebrow">02 / 스마트 물류 보고서 2.2 · 그림 1 재구성</p><h2>중앙은 계획하고, 현장은 움직입니다</h2></header>
+  <div class="figure-layout architecture-layout">
+    <div>
+      <p class="figure-intro">평상시에는 작업과 권한이 중앙에서 현장으로 내려갑니다. 연결이 돌아오면 현장의 기록이 중앙으로 올라갑니다.</p>
+      <dl class="architecture-reading">
+        <div><dt><span>01</span> 중앙</dt><dd>주문을 작업으로 바꾸고 로봇에 통로 사용 권한을 미리 발급합니다.</dd></div>
+        <div><dt><span>02</span> 구역 엣지</dt><dd>창고 안의 장치가 이동 칸을 조정하고 로봇의 기록을 복제합니다.</dd></div>
+        <div><dt><span>03</span> 로봇</dt><dd>앞 공정과 권한을 확인해 움직이고 완료 기록을 남깁니다.</dd></div>
+      </dl>
+    </div>
+    <figure class="architecture-figure">
+      <a href="/architecture.svg" aria-label="DAOS 3계층 구조도 크게 보기"><img src="/architecture.svg" width="1280" height="570" alt="중앙은 작업과 통로 사용 권한을 구역 엣지로 보냅니다. 엣지는 로봇과 작업 기록을 주고받고, 연결 복구 뒤 중앙이 현장 기록과 실물 위치를 대조합니다."></a>
+      <figcaption><span>그림 1 · 스마트 물류 보고서 2.2 재구성</span><a href="/architecture.svg">구조도 크게 보기 ↗</a></figcaption>
+    </figure>
+  </div>
+  <figure class="recovery-figure" aria-labelledby="recovery-caption">
+    <figcaption id="recovery-caption"><strong>복구할 때는 상자 하나마다 세 가지를 확인합니다</strong></figcaption>
+    <div class="recovery-flow">
+      <ul><li><b>중앙 기록</b><span>장애 직전 어디까지 했나?</span></li><li><b>현장 로그</b><span>연결이 끊긴 동안 무엇을 했나?</span></li><li><b>위치 증거</b><span>상자가 실제로 어디에 있나?</span></li></ul>
+      <span class="recovery-arrow" aria-hidden="true">→</span>
+      <div class="recovery-results"><p><b>일치</b> · 마지막으로 끝낸 공정부터 이어갑니다.</p><p><b>불일치</b> · 그 상자는 확인할 때까지 보류합니다.</p></div>
+    </div>
+  </figure>
+  <details class="technical-note"><summary>보고서 설계와 브라우저 시연의 차이</summary><p>보고서는 정상 시 향후 5분 범위의 권한 위임, 하트비트 3회 누락 감지, 작업·자원 관계를 이용한 판단(DRG), 같은 구역의 로봇 간 협상을 제안합니다. 웹은 전환 시작 시 1초 정지하며, 복구 시 상자 위치 전송과 기록 대조를 마친 뒤 운전을 재개합니다. 작업표는 마지막 갱신부터 45초 동안 유효합니다. 공정 순서와 구역 권한·이동 칸 예약으로 동작을 재현합니다. 만료가 가까워지면 신규 배정을 중지하고, 권한과 경로가 확보된 로봇은 공유 통로를 비웁니다. 만료 뒤에는 로봇과 컨베이어를 정지합니다. VDA 5050의 Base는 관제가 명시적으로 승인한 경로이며 이 시연의 구역·격자 권한과 범위가 다릅니다.</p><p>실제 장비에서는 구역 소형 PC의 MQTT 중계와 시각 동기화, 로봇 카메라·작업자 PDA의 물품 확인, 로봇 간 직접 협상을 검증할 계획입니다. 웹의 3중 대조는 중앙 기록·로봇 및 엣지 로그·가상 위치 증거를 비교하며, 대조 후 새 운전 세대(에폭)를 발급합니다.</p></details>
+</section>
+<section class="exhibit-section" id="data-and-algorithms">
+  <header class="section-heading"><p class="eyebrow">보고서 3.2 · 4.1–4.3</p><h2>무엇을 저장하고, 언제 움직이나요?</h2><p>중앙이 정상일 때 권한을 저장하고, 장애 중에는 허용된 작업만 이어갑니다. 연결이 돌아오면 기록을 대조해 새 에폭에서 운전을 재개합니다.</p></header>
+  <dl class="evidence-rail">
+    <div><dt>① 미리 받은 점유권</dt><dd>로봇, 자원, 작업 목록, 유효 시작·종료 시각과 에폭을 묶습니다. 아래 예시에서 AMR-17은 에폭 12에 B3 통로를 10:15부터 10:17까지 두 작업에 사용할 권한을 받습니다.</dd></div>
+    <div><dt>② 작업 판별 · DRG</dt><dd><b>초록</b>은 선행 작업이 완료됐고 예상 실행 시간과 여유시간을 덮는 권한이 있는 경우입니다. <b>노랑</b>은 같은 구역에서 엣지의 추가 승인이 필요한 경우입니다. 승인 전에는 대기합니다. 선행 작업 미완료, 만료, 협상 불가이면 <b>빨강</b>으로 보류합니다.</dd></div>
+    <div><dt>③ 3중 대조와 에폭 펜싱</dt><dd>장애 직전 중앙 기록, 로봇의 추가 전용 로그와 엣지 복제본, 마지막 실물 스캔을 비교합니다. 일치한 작업만 확정하고 증거가 부족하면 보류합니다. 새 에폭이 발급되면 이전 에폭의 권한과 지연된 기록을 거부합니다.</dd></div>
+  </dl>
+  <details class="technical-note"><summary>점유권과 작업 로그 JSON 예시</summary>
+    <div class="exhibit-split">
+      <div><p><b>점유권</b> · 시각은 날짜와 시간대까지 기록합니다.</p><pre class="data-example">{
+  "leaseId": "L-20261110-0042",
+  "robotId": "AMR-17",
+  "epoch": 12,
+  "resource": "AISLE-B3",
+  "from": "2026-11-10T10:15:00+09:00",
+  "until": "2026-11-10T10:17:00+09:00",
+  "taskIds": ["T-88121", "T-88122"]
+}</pre></div>
+      <div><p><b>작업 로그</b> · AMR-17이 ST-04에서 하역 후 R-2210 랙을 스캔한 예입니다.</p><pre class="data-example">{
+  "eventId": "12/AMR-17/5531",
+  "taskId": "T-88121",
+  "epoch": 12,
+  "seq": 5531,
+  "event": "DROP_DONE",
+  "hlc": "2026-11-10T10:16:42.118+09:00#3",
+  "node": "ST-04",
+  "rackId": "R-2210",
+  "scan": "OK"
+}</pre></div>
+    </div>
+    <p><code>taskId</code>는 작업 전체를, <code>eventId</code>는 개별 기록을 식별합니다. 같은 작업에도 여러 이벤트가 생깁니다. 재전송은 같은 키로 한 번만 처리하고, 같은 키에 다른 내용이 도착하면 확인을 보류합니다. HLC는 인과 순서 추적에 쓰고 점유권 만료는 시간 오차를 감안한 별도 검사로 판단합니다. <a href="https://cse.buffalo.edu/~demirbas/publications/hlc.pdf">HLC 원 논문 ↗</a></p>
+  </details>
+  <details class="technical-note"><summary>브라우저에서 검증할 수 있는 범위</summary><p>시연은 공정 순서와 구역 사용 권한, 현재 점유 칸으로 DRG를 단순화했습니다. 중앙은 작업표를 10초마다 갱신하고, 발급된 권한은 45초 동안 유효합니다. 작업과 이동에 필요한 시간에 0.5초를 더해 판단합니다. 공유 통로 예약은 엣지가 담당하고, 같은 칸에 둘이 진입할 수 없도록 시뮬레이터가 점유를 관리합니다.</p><p>중앙을 끊은 뒤 공유 통로 엣지를 끊으면 해당 통로가 필요한 작업이 보류됩니다. 현장 로그와 가상 스캔을 대조해 새 에폭으로 전환하는 과정까지 브라우저에서 확인할 수 있습니다.</p><p><a href="/open/robot">물류 현장 시뮬레이터 열기 ↗</a></p></details>
+</section>
+<section class="exhibit-section" id="implementation">
+  <header class="section-heading"><p class="eyebrow">보고서 5.1–5.3</p><h2>현장 검증 계획</h2><p>현재 웹 시연은 가상 작업표와 브라우저 격자를 사용합니다. 아래는 규모 확대와 장비 연동을 위한 구현 후보입니다.</p></header>
+  <details class="technical-note"><summary>기술 스택과 선정 이유</summary>
+    <dl class="evidence-rail">
+      <div><dt>시뮬레이션</dt><dd>Python 격자로 수백 대의 처리량을 비교하고, ROS 2 Humble과 Gazebo Fortress로 장비의 운동과 센서를 확인합니다. <a href="https://gazebosim.org/docs/fortress/ros_installation/">공식 호환 문서 ↗</a></dd></div>
+      <div><dt>통신</dt><dd>Mosquitto를 구역별 MQTT 브로커로 사용하고, 이동 로봇의 주문·상태는 장비가 지원하는 VDA 5050 버전의 JSON 스키마로 검증합니다. DAOS 점유권과 대조 로그는 별도 메시지로 정의합니다. <a href="https://github.com/VDA5050/VDA5050">공식 사양·스키마 ↗</a></dd></div>
+      <div><dt>로봇·엣지</dt><dd>Python/C++ ROS 2 노드와 SQLite 로컬 로그를 사용합니다. Raspberry Pi 5 또는 미니 PC의 Docker 환경에서 구역 중계와 복제를 시험합니다. 장비가는 견적을 통해 확정합니다.</dd></div>
+      <div><dt>중앙·시각화</dt><dd>FastAPI로 복구 대조 API를 제공하고 PostgreSQL에 권한과 로그를 보존합니다. Redis는 임시 상태에 사용하고, Grafana로 DAOS 적용 전후 처리량과 복구시간을 비교합니다.</dd></div>
     </dl>
-    <p>엣지 2대를 각각 10W로 24시간 가동하고 전력 단가를 200원/kWh로 가정하면 전력비는 연 약 3.5만 원입니다. 개발·연동, 유지보수, 인력, 네트워크 비용은 별도 견적이 필요합니다.</p>
-    <p>본문 표 기준으로 연 6회 장애가 나면 운영비 차감 전 직접 절감 추정액은 약 776.5만 원입니다. 2시간 장애에서 초반 처리율 60%를 30분 유지하면 예상 손실은 2,550라인, 5분 유지하면 약 2,800라인입니다. 이후 처리율은 두 경우 모두 30%로 가정했습니다.</p>
+  </details>
+  <details class="technical-note"><summary>확보한 자료와 필요한 데이터</summary><p>공개 VDA 5050 사양과 MAPF 창고 지도를 활용할 수 있습니다. 웹은 자체 가상 주문을 사용하며, 다음 실험에서는 장애 시점·길이·단절 구역을 바꾼 데이터를 생성합니다. 실제 센터의 장애 빈도·지속시간·복구시간은 미확보 상태이므로 비용 및 성능 기준선은 가정값입니다. <a href="https://movingai.com/benchmarks/mapf.html">Moving AI 창고 지도 ↗</a> · <a href="https://www.leagueofrobotrunners.org/">League of Robot Runners ↗</a></p></details>
+  <details class="technical-note"><summary>설계 리스크와 대응</summary>
+    <dl class="evidence-rail">
+      <div><dt>로봇 지연·장애물</dt><dd>권한에 여유시간을 두고 만료 시 정지합니다. 장비 시험에서는 로봇 자체 장애물 센서와 안전 제어를 우선합니다.</dd></div>
+      <div><dt>구역 엣지 동시 장애</dt><dd>추가 협상이 필요한 작업을 보류하고 이미 권한을 받은 작업만 이어갑니다. 직접 통신은 중복 점유를 막는 조건을 검증한 뒤 후속 실험에 포함합니다.</dd></div>
+      <div><dt>로그 유실</dt><dd>엣지에 기록을 복제하고 스캔으로 마지막 위치를 확인합니다. 대조 증거가 부족하면 작업을 확인 대기로 남깁니다.</dd></div>
+      <div><dt>시계 불일치</dt><dd>HLC와 기록 순번으로 인과관계와 누락을 확인합니다. 실제 장비는 별도 시간 동기화와 오차 한계를 검증해 권한 유효기간을 계산합니다.</dd></div>
+    </dl>
+  </details>
+</section>
+<section class="exhibit-section" id="evidence">
+  <header class="section-heading"><p class="eyebrow">03 / 기술 근거</p><h2>논문에서 가져온 원리와 DAOS의 적용</h2></header>
+  <dl class="evidence-rail">
+    <div><dt>미리 저장</dt><dd>Coda의 단절 운영을 참고했습니다. DAOS에서는 파일 대신 승인된 작업표를 저장합니다.</dd></div>
+    <div><dt>오래된 권한 구분</dt><dd>Chubby의 권한 세대 확인을 참고했습니다. 로봇 시연은 작업표의 운전 세대와 유효시간을 검사합니다.</dd></div>
+    <div><dt>순서와 실물 확인</dt><dd>Bayou는 작업 조건을, Dynamo는 복제본의 차이를 확인하는 원리를 보여줍니다. DAOS 로봇 시연은 세 종류의 기록을 맞춰 보며 실물 위치는 가상 스캔으로 표현합니다.</dd></div>
+  </dl>
+  <div class="actions"><a class="secondary" href="/papers.html">논문 원문·한국어 번역 자료 ↗</a></div>
+</section>
+<section class="exhibit-section" id="test">
+  <header class="section-heading"><p class="eyebrow">04 / 실험과 비용 · 보고서 5.4, 6장</p><h2>장애가 같을 때 무엇이 달라지는가</h2><p>로봇 수와 작업표, 장애 시점과 지속시간을 맞춰 DAOS를 끈 경우와 켠 경우를 비교합니다.</p></header>
+  <div class="figure-layout">
+    <dl class="cost-facts">
+      <div><dt>장애 1회 직접 손실 감소 추정</dt><dd>약 129.4만 원</dd><p>긴급 대응비 121.5만 원 + 수동 복구 인건비 약 7.9만 원</p></div>
+      <div><dt>초기 장비와 월 운영비 예시</dt><dd>약 40만 원 / 월 약 2.3만 원</dd><p>엣지 2대 기준. 월 운영비는 중앙 VM 상한과 전력비를 합산한 값입니다.</p></div>
+    </dl>
+    <figure class="loss-chart">
+      <figcaption><strong>장애 30분과 복구 구간의 미처리 물량</strong><small>가정 기반 계산 · 시간당 2,000 주문 품목 줄</small></figcaption>
+      <div class="chart-row"><span>기존 방식</span><div class="chart-track"><i class="bar-baseline"></i></div><strong>1,800줄</strong></div>
+      <div class="chart-row"><span>DAOS 적용</span><div class="chart-track"><i class="bar-daos"></i></div><strong>450줄</strong></div>
+      <p>보고서 6장 본문 표 기준 · 1,350줄 차이</p>
+    </figure>
+  </div>
+  <details class="technical-note"><summary>비용 계산과 보고서 그림 3의 차이</summary><p>장애 30분 동안 처리율은 기존 0%, DAOS 60%로 가정했습니다. 복구 구간은 기존 40분·처리율 40%, DAOS 5분·처리율 70%를 사용했습니다. 긴급 대응비는 1,350줄 × 30% × 3,000원입니다. 수동 복구 인건비는 시간당 25,000원으로 기존 5명 × 40분과 DAOS 적용 시 1명 × 10분을 비교했습니다.</p><p>그림 3의 DAOS 복구 처리율 30%를 적용하면 미처리 약 517줄, 직접 손실 감소 약 123.4만 원입니다. 월 운영비 예시는 VM 월 2만 원과 엣지 두 대 각 10W, 24시간 가동, 200원/kWh를 가정했습니다. 같은 장애를 연 6회 가정하면 운영비 차감 전 직접 절감 추정액은 약 776.5만 원입니다. 개발·연동·유지보수는 별도이며 실제 장애 이력과 견적을 확보한 뒤 투자 회수 기간을 산정합니다.</p></details>
+  <details class="technical-note"><summary>실물 검증에서 측정할 항목</summary><p>장애 중 처리량 유지율, 정상화 시간, 중복·누락, 확인 보류, 통로 충돌·교착을 기록합니다. 보고서의 장애 중 처리량 60% 이상, 정상화 5분 이내, 중복 0건은 검증 목표입니다. 실제 장비에서는 안전 정지, 센서와 스캐너, 엣지 장애 및 시계 오차를 별도로 시험합니다.</p><p>보고서의 실증 계획은 격자 시뮬레이션 → 구역 장치 MQTT 연결 → 소형 로봇 3대 시험 순입니다. 시연은 가상 주문과 작업 이력을 쓰며, 협력 물류센터의 실제 데이터는 비식별 집계값으로 기준선을 보정하는 데 사용할 계획입니다.</p><p class="source-links"><a href="https://www.iso.org/standard/83545.html">무인 산업차량 안전 요구사항</a> · <a href="https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html">MQTT 규격</a> · <a href="https://movingai.com/benchmarks/mapf/">창고 지도 벤치마크</a></p></details>
+  <details class="technical-note"><summary>사고 사례와 보고서 수치의 해석</summary><p>Ocado는 2021년 Erith 센터의 화재가 로봇 세 대의 충돌로 발생했다고 발표했습니다. 이 사례는 현장 재가동의 중요성을 보여주며, 발표에서는 서버 장애를 원인으로 지목하지 않았습니다. <a href="https://www.ocadogroup.com/newsroom/news/statement-regarding-incident-at-erith-customer-fulfilment-centre">Ocado 공식 발표 ↗</a></p></details>
+</section>
+<section class="exhibit-section" id="systems" aria-labelledby="entry-title">
+  <header class="section-heading"><p class="eyebrow">DAOS 시연</p><h2 id="entry-title">어떤 화면을 열까요?</h2></header>
+  <div class="entry-grid">
+    <article class="entry-operation"><p class="eyebrow">배송 운영</p><h3>운영 사이트 접속</h3><p>스토어, 메인 관제센터, 지역 허브, 모바일 기사 앱을 엽니다. 주문부터 배송 완료까지 실제 화면 간 데이터가 이어집니다.</p><a href="/operations.html">운영 사이트 목록 ↗</a></article>
+    <article class="entry-robot"><p class="eyebrow">창고 실험</p><h3>물류 현장 시뮬레이터</h3><p>별도 가상 작업표로 로봇 18대가 움직입니다. 서버 연결을 끊고 DAOS를 켠 경우와 끈 경우를 비교합니다.</p><a href="/open/robot">물류 현장 시뮬레이터 열기 ↗</a></article>
   </div>
 </section>
+<section class="exhibit-section" id="handoff-verification"><header class="section-heading"><p class="eyebrow">물류 현장 적용</p><h2>앞 공정의 결과를 다음 로봇이 확인합니다</h2></header><div class="exhibit-split"><div><p>운반 AMR 6대와 하차·분류·적재·상차 로봇을 각 3대 배치하고 컨베이어 6대로 인계를 연결했습니다. 장애 중에도 사전에 받은 작업·설비 권한의 유효시간 안에서만 운전합니다.</p><p>후속 로봇은 인계 기록과 별도의 가상 스캔에 담긴 상자 코드·수량·도크·공정 단계를 비교합니다. 일치하면 인수하고, 불일치하면 해당 상자를 보류합니다. 복구 후 3중 대조는 이 현장 2차 검증과 별도로 수행합니다.</p></div><div><p><a href="/papers.html#bayou">Bayou의 의존성 검사</a>를 선행 조건 확인에 참고한 DAOS 응용 설계입니다. 실제 센서나 로봇의 검출 성능을 입증한 것은 아닙니다. 현장 통신·스캔·설비는 브라우저에서 모사합니다.</p><div class="actions"><a class="primary" href="/open/robot">물류 현장 시연 열기 ↗</a></div></div></div></section>
 </main>
-<footer class="shell bar"><span>DAOS · 프로젝트 기술 소개</span><a href="/#systems">통합 시연으로 돌아가기 ↗</a></footer>
+<footer class="shell bar"><span>DAOS · 스마트 물류 경진대회</span><a href="https://github.com/Hue-0825/DAOS" target="_blank" rel="noopener noreferrer">GitHub 저장소 ↗</a></footer>
 </body>
 </html>

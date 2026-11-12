@@ -6,7 +6,8 @@
 
 - [공유용 공개 시연](https://daos-logistics.ryker6365.chatgpt.site/)에서 역할별 운영 화면과 장애 시연 순서를 확인할 수 있습니다.
 - [배송 운영 데모 안내](daos-demo/README.md)에서 배포 주소, 실행 방법, 주문·배차·장애 시연 순서를 확인할 수 있습니다. 운영 화면에는 접근 권한이 필요합니다.
-- [Android 설치용 APK](daos-demo/downloads/DAOS-Driver.apk) · [iPhone Xcode 프로젝트](daos-demo/mobile/ios/). iPhone 설치에는 Apple 서명이 필요합니다.
+- [최종 Android 데모 APK](daos-demo/downloads/DAOS-Driver.apk) · [iPhone Xcode 프로젝트](daos-demo/mobile/ios/). iPhone 빌드 전에 `daos-demo`에서 `bash mobile/ios/prepare.sh`를 실행하세요. 기기 설치에는 Apple 서명이 필요합니다.
+- [최종 교차 검증 기록과 재실행 방법](docs/DAOS_FINAL_VERIFICATION.md)
 - [프로젝트 설계서](docs/PROJECT_PLAN.md)에서 로봇, 물류센터, 복구 검증의 계획을 확인할 수 있습니다.
 
 ## 배포 주소

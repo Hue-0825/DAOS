@@ -1,5 +1,5 @@
-import {BATCH,STAGES,Warehouse,BACKUP_LIFETIME_MS} from './warehouse-engine.mjs?v=23';
-import {createScene} from './warehouse-scene.mjs?v=26';
+import {BATCH,STAGES,Warehouse,BACKUP_LIFETIME_MS} from './warehouse-engine.mjs?v=24';
+import {createScene} from './warehouse-scene.mjs?v=27';
 
 const $=id=>document.getElementById(id);
 const canvas=$('warehouse');
@@ -174,6 +174,18 @@ function paint(){
   }
   $('audit-result').hidden=!online||!sim.audit;
   if(online&&sim.audit)set('audit-result',`전환 위치 ${sim.audit.received}개 수신 · ${sim.audit.changed}개 변경 · 3중 대조 일치 ${sim.audit.verified}개 / 확인 보류 ${sim.audit.held}개 · 엣지 복제 ${sim.audit.replicated}건 · 운전 세대 ${sim.epoch}`);
+  const {online:normal,offline:backupRun,switchMs}=sim.kpi;
+  const ratio=normal.stages>0&&backupRun.seconds>0
+    ?Math.round((backupRun.stages/backupRun.seconds)/(normal.stages/normal.seconds)*100):null;
+  set('kpi-continue',ratio===null?'비교 표본 대기':`정상 대비 ${ratio}% · 장애 중 ${backupRun.stages}공정`);
+  set('kpi-switch',switchMs===null?'장애 시 측정':`${(switchMs/1000).toFixed(2)}초`);
+  const checks=sim.audit?.checks;
+  set('kpi-audit',checks?`${sim.audit.held}개 / ${checks.duplicates}건`:'복구 시 측정');
+  const auditPending=phase==='recovering';
+  const auditStatus=auditPending?(sim.recoveryPhase==='reconcile'?'대조 중':'위치 수신 대기'):'대기';
+  set('audit-ids',`이벤트 ID와 중복 검사 · ${!auditPending&&checks?`${checks.ids}/${checks.candidates}개 통과 · 중복 ${checks.duplicates}건`:auditStatus}`);
+  set('audit-chain',`선행 공정과 엣지 기록 대조 · ${!auditPending&&checks?`${checks.chain}/${checks.ids}개 통과`:auditStatus}`);
+  set('audit-scan',`전환 시점 위치와 스캔 대조 · ${!auditPending&&checks?`${checks.scans}/${checks.chain}개 통과`:auditStatus}`);
   $('daos-switch').setAttribute('aria-checked',String(sim.daosEnabled));
   connection.dataset.recover=String(sim.mode==='offline');
   set('daos-value',sim.daosEnabled?'ON':'OFF');

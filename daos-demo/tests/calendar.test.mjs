@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {koreaDay,dayDistance,shiftCalendar,calendarApi} from '../calendar.mjs';
+assert.equal(koreaDay(Date.parse('2026-11-11T14:59:59Z')),'2026-11-11');
+assert.equal(koreaDay(Date.parse('2026-11-11T15:00:00Z')),'2026-11-12');
+const fixture={date:'2026-11-09',key:'2026-11-09/abc',at:'2026-11-09T15:00:00Z',resets:{'2026-11-10':2},id:'abc'};
+assert.deepEqual(shiftCalendar(shiftCalendar(fixture,60),-60),fixture);
+assert.equal(shiftCalendar(fixture,2).at,fixture.at);
+assert.equal(shiftCalendar('2026-12-31',1),'2027-01-01');
+let seen;
+const handler=async req=>{seen=await req.json();return Response.json({clock:{date:'2026-11-09',time:'06:00'},historyDates:['2026-11-09','2026-11-13'],...fixture});};
+const response=await calendarApi(new Request('https://test/api',{method:'POST',body:JSON.stringify({date:'2026-11-12',key:'2026-11-12/abc'})}),null,'/api',handler,Date.parse('2026-11-11T15:00:00Z'));
+assert.equal(seen.date,'2026-11-09');assert.equal(seen.key,'2026-11-09/abc');
+const result=await response.json();assert.equal(result.clock.calendarBase,'2026-11-12');assert.equal(result.clock.date,'2026-11-12');assert.equal(result.queueStart,'2026-11-17');assert.deepEqual(result.historyDates,['2026-11-12','2026-11-16']);
+const outage=await calendarApi(new Request('https://test/api'),null,'/api',async()=>Response.json({clock:{date:'2026-11-09',time:'06:00'},error:'offline'},{status:503}),Date.parse('2026-11-11T15:00:00Z'));
+assert.equal(outage.status,503);assert.equal((await outage.json()).clock.date,'2026-11-12');
+console.log('PASS KST midnight, year rollover, date/key roundtrip, preserved timestamps, queue dates, disconnected clock');

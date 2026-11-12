@@ -9,10 +9,14 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.webkit.CookieManager;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -50,6 +54,14 @@ public final class DriverActivity extends Activity {
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 return bundledAsset(request.getUrl());
             }
+            @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                Uri url = request.getUrl();
+                if (request.isForMainFrame() && HOST.equals(url.getHost()) && "/driver/".equals(url.getPath())
+                        && (error.getErrorCode() == ERROR_HOST_LOOKUP || error.getErrorCode() == ERROR_CONNECT
+                        || error.getErrorCode() == ERROR_TIMEOUT)) {
+                    view.post(() -> openDriver());
+                }
+            }
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri url = request.getUrl();
                 if ("https".equals(url.getScheme())) return false;
@@ -62,7 +74,18 @@ public final class DriverActivity extends Activity {
         openDriver();
     }
     private void openDriver() {
-        web.loadUrl(SITE + "/driver/");
+        // The HTML comes from the APK. Retain the HTTPS origin for storage and authenticated API requests.
+        try (InputStream stream = getAssets().open("driver/index.html");
+             ByteArrayOutputStream body = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[8192];
+            for (int count; (count = stream.read(buffer)) != -1;) body.write(buffer, 0, count);
+            web.loadDataWithBaseURL(SITE + "/driver/",
+                    new String(body.toByteArray(), StandardCharsets.UTF_8),
+                    "text/html", "UTF-8", SITE + "/driver/");
+        } catch (IOException error) {
+            web.loadDataWithBaseURL(null, "<meta charset=utf-8><p>앱에 포함된 배송 화면을 열 수 없습니다.</p>",
+                    "text/html", "UTF-8", null);
+        }
     }
     private WebResourceResponse bundledAsset(Uri url) {
         if (!HOST.equals(url.getHost()) || !"https".equals(url.getScheme())) return null;

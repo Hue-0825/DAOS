@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
   <title>DAOS 물류 로봇 및 현장 시뮬레이터</title>
-  <link rel="stylesheet" href="warehouse.css?v=23">
-  <script type="module" src="warehouse-view.mjs?v=30"></script>
+  <link rel="stylesheet" href="warehouse.css?v=24">
+  <script type="module" src="warehouse-view.mjs?v=31"></script>
 </head>
 <body class="robot-lab">
   <header class="topbar"><a class="wordmark" href="https://daos-logistics.ryker6365.chatgpt.site/"><b>DAOS</b><span> / 물류 현장 시뮬레이터</span></a><div class="top-actions"><a href="/project.html">시스템 설명 ↗</a><span id="mode" class="server-state" role="status">시연 서버 연결됨</span></div></header>
@@ -59,6 +59,14 @@
       <details class="record-inspector"><summary>선택 로봇의 점유권과 작업 이력</summary>
         <p>배치도에서 로봇을 선택하세요. 작업 이력은 장애 중 공정을 완료하면 추가됩니다.</p>
         <pre id="robot-records"></pre>
+      </details>
+      <details class="record-inspector" id="audit-steps">
+        <summary>복구 검증 단계</summary>
+        <ol>
+          <li id="audit-ids">이벤트 ID와 중복 검사 · 대기</li>
+          <li id="audit-chain">선행 공정과 엣지 기록 대조 · 대기</li>
+          <li id="audit-scan">전환 시점 위치와 스캔 대조 · 대기</li>
+        </ol>
       </details>
       <div class="facility-strip"><strong id="facility-mode">컨베이어 준비 중</strong><span id="belt-count"></span><span>말풍선에서 2차 검증 과정을 확인하세요.</span></div>
       <section class="handoff-panel" aria-label="후속 공정 2차 검증"><p class="kicker">인계 기록 × 가상 실물 스캔</p><h3>다음 로봇이 한 번 더 확인합니다</h3><strong id="check-count"></strong><p id="check-latest"></p></section>
@@ -116,6 +124,15 @@
       <div><span>상차 완료</span><strong id="completed">0개</strong></div>
       <div><span>로컬 공정 기록</span><strong id="pending">0건</strong></div>
     </section>
+      <details class="panel record-inspector" open>
+        <summary>시연 지표</summary>
+        <dl class="warehouse-kpis">
+          <div><dt>장애 중 공정 처리율</dt><dd id="kpi-continue">비교 표본 대기</dd></div>
+          <div><dt>DAOS 전환 지연</dt><dd id="kpi-switch">장애 시 측정</dd></div>
+          <div><dt>복구 확인 보류 / 중복 발견</dt><dd id="kpi-audit">복구 시 측정</dd></div>
+        </dl>
+        <p><a href="/project.html#test">30분 장애 비용 시나리오 ↗</a></p>
+      </details>
       </aside>
     </div>
     <details class="panel operations-details">
@@ -144,7 +161,7 @@
     </details>
     <details class="research-note"><summary>보고서와 논문에서 가져온 원리</summary>
         <p>스마트 물류 보고서 2.2의 중앙·엣지·로봇 구조를 바탕으로 컨베이어를 구역 엣지의 제어 대상으로 확장했습니다. 작업표와 설비 사용 권한을 미리 저장하고, 장애·복구 시 1초 정지합니다.</p>
-        <p><a href="https://daos-logistics.ryker6365.chatgpt.site/papers.html#coda">Coda</a>의 단절 운영은 사전 저장에, <a href="https://daos-logistics.ryker6365.chatgpt.site/papers.html#bayou">Bayou</a>의 의존성 검사는 선행 공정 확인에, <a href="https://daos-logistics.ryker6365.chatgpt.site/papers.html#chubby">Chubby</a>의 권한 세대 검사는 낡은 명령 차단에 참고했습니다. 후속 로봇의 2차 스캔은 이를 물류 인계에 적용한 DAOS 설계이며, 해당 논문이 로봇의 실물 검증 성능을 입증한 것은 아닙니다.</p>
+        <p><a href="/papers.html#coda">Coda</a>의 단절 운영은 사전 저장에, <a href="/papers.html#bayou">Bayou</a>의 의존성 검사는 선행 공정 확인에, <a href="/papers.html#chubby">Chubby</a>의 권한 세대 검사는 낡은 명령 차단에 참고했습니다. 후속 로봇의 2차 스캔은 이를 물류 인계에 적용한 DAOS 설계이며, 해당 논문이 로봇의 실물 검증 성능을 입증한 것은 아닙니다.</p>
         <p>이 시연의 실물 스캔·센서·컨베이어 제어는 가상 모델입니다. 1초 정지는 시연 규칙이며 실제 설비의 안전 인증값이 아닙니다. 같은 센서의 공통 오류나 눈에 보이지 않는 파손까지 검출하지는 않습니다.</p>
       </details>
     <p class="disclosure">작업표 유효시간과 서버·현장 로그·가상 스캔 대조는 이 탭에서 재현합니다. 메인 관제센터의 서버 연결 상태를 읽고, 창고 작업과 위치 데이터는 시연 탭에서 처리합니다. </p>

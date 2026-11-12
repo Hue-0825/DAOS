@@ -68,6 +68,7 @@ export class Warehouse {
     this.localTransfers = [];
     this.scanFaults=new Set();
     this.audit = null;
+    this.kpi={online:{seconds:0,stages:0},offline:{seconds:0,stages:0},switchMs:null};
     this.simTime = 0;
     this.beltTime = 0;
     this.armHandoff=null;
@@ -233,24 +234,35 @@ export class Warehouse {
     }
     let verified=0,held=0,confirmedEvents=0;
     const results=[];
+    const checks={candidates:0,ids:0,chain:0,scans:0,duplicates:0};
     const candidates=new Set([...grouped.keys(),...packet.changed.map(([id])=>id)]);
     for(const id of candidates){
       const job=this.jobs.get(id), group=grouped.get(id)??[];
+      checks.candidates++;
       const unique=new Map();
       let conflict=false;
       for(const event of group){
         const copy=unique.get(event.eventId);
-        if(copy&&!sameEvent(copy,event))conflict=true;
+        if(copy){checks.duplicates++;if(!sameEvent(copy,event))conflict=true;}
         if(!copy)unique.set(event.eventId,event);
       }
       const chain=[...unique.values()].sort((a,b)=>a.from-b.from);
       let stage=this.centralStages.get(id);
-      const continuous=chain.every(event=>event.epoch===this.epoch&&event.from===stage&&event.to===++stage
-        &&event.scan==='OK'&&this.edges[event.zone].matches(event));
+      const continuous=chain.every(event=>{
+        if(event.epoch!==this.epoch||event.from!==stage||event.to!==stage+1
+          ||event.scan!=='OK'||!this.edges[event.zone].matches(event))return false;
+        stage=event.to;
+        return true;
+      });
       const position=packet.positions.get(id),scan=position?.scan,last=chain.at(-1);
-      const agreed=!conflict&&continuous&&stage===job.stage&&position?.stage===stage&&scan?.stage===stage
+      const idsOk=!conflict&&chain.every(event=>event.eventId===`${event.epoch}/${event.node}/${event.seq}`);
+      const chainOk=idsOk&&continuous&&stage===job.stage;
+      const agreed=chainOk&&position?.stage===stage&&scan?.stage===stage
         &&(!last||scan.location===last.location)
         &&scan.barcode===job.barcode&&scan.quantity===job.quantity&&scan.dock===job.dock;
+      if(idsOk)checks.ids++;
+      if(chainOk)checks.chain++;
+      if(agreed)checks.scans++;
 
       if(agreed){
         verified++;
@@ -266,7 +278,7 @@ export class Warehouse {
       }
       results.push({taskId:id,agreed,events:chain});
     }
-    this.audit={verified,held,received:packet.positions.size,changed:packet.changed.length,replicated:this.edges.reduce((total,edge)=>total+edge.log.size,0)};
+    this.audit={verified,held,checks,received:packet.positions.size,changed:packet.changed.length,replicated:this.edges.reduce((total,edge)=>total+edge.log.size,0)};
     this.auditHistory.push({epoch:this.epoch,results});
     this.epoch++;
     this.mode='online';
@@ -356,6 +368,7 @@ export class Warehouse {
     if (phase === this.reportedPhase || !messages[phase]) return;
     this.reportedPhase = phase;
     if(phase==='backup'){
+      if(this.kpi.switchMs===null)this.kpi.switchMs=now-this.outageAt;
       this.recordSpecial('backup','DAOS 가동',`백업 작업표로 운전을 이어갑니다. 남은 백업 상자 ${this.backupRemaining}개.`,now,'backup');
     }else if(['stopped','waiting','expired','drained'].includes(phase)){
       const titles={stopped:'DAOS 꺼짐 · 안전 정지',waiting:'백업 작업표 대기',expired:'백업 작업표 만료',drained:'백업 작업 완료'};
@@ -436,6 +449,7 @@ export class Warehouse {
     this.updateConnection(now);
     const phase=this.offlinePhase(now);
     if (this.mode !== 'online' && phase !== 'backup') return;
+    this.kpi[this.mode].seconds+=dt;
     this.simTime+=dt;
     this.beltTime+=dt;
     this.advanceBelts(dt,now);
@@ -611,6 +625,7 @@ export class Warehouse {
   }
   completeStage(job,actor,point){
     const from=job.stage++;
+    this.kpi[this.mode].stages++;
     const location=point.join(',');
     // The simulated sensor channel is distinct from the upstream completion record.
     const predecessorClock=this.handoffRecords.get(job.id)?.hlc;

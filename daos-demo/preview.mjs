@@ -72,4 +72,4 @@ createServer(async (incoming, outgoing) => {
   } catch {
     outgoing.writeHead(500).end('Preview server error');
   }
-}).listen(port,host,()=>console.log(`DAOS 운영 웹 http://${host}:${port}${process.env.DAOS_SERVICE_TOKEN ? '/central/' : '/ops/'}`));
+}).listen(port,host,()=>console.log(`DAOS 운영 웹 http://${host}:${port}/central/`));

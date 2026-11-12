@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>논문 자료실 | DAOS</title><meta name="description" content="DAOS에 연관된 연구 원문, 한국어 요약 번역, 핵심 발췌 번역과 적용 범위입니다."><link rel="stylesheet" href="/style.css?v=12"></head>
+<body class="contest">
+<header class="topbar"><div class="shell bar"><a class="brand" href="/">DAOS <span>스마트 물류</span></a><nav aria-label="자료실 메뉴"><a href="/project.html">시스템 설명</a><a href="/operations.html">운영 화면</a><a href="/open/robot">로봇 시연</a></nav></div></header>
+<main class="shell">
+  <header class="paper-intro"><p class="eyebrow">연구 자료 / 원문 대조</p><h1>논문 자료실</h1><p class="lead">조사 보고서의 논문 7편과 권한 세대를 설명하는 Chubby를 모았습니다. 원문, 한국어 요약 번역, DAOS에 쓰이는 핵심 발췌 번역을 나눠 읽을 수 있습니다.</p><p>발췌의 절 위치를 함께 적었습니다. 한국어 요약은 연구의 문제와 접근을 정리한 자료입니다.</p></header>
+  <nav class="paper-index" aria-label="논문 바로가기"><a href="#coda">Coda</a><a href="#bayou">Bayou</a><a href="#chubby">Chubby</a><a href="#local-first">Local-first</a><a href="#sessionstore">SessionStore</a><a href="#crdt">CRDT</a><a href="#afrin">엣지 로봇</a><a href="#dynamo">Dynamo</a></nav><div class="paper-list">
+<article class="paper" id="coda"><header><p class="eyebrow">핵심 · 작업표 사전 저장</p><h2>Disconnected Operation in the Coda File System</h2><p class="paper-meta">Kistler · Satyanarayanan, 1992 · ACM TOCS</p></header>
+ <div class="paper-sections">
+  <section><h3>01 논문 원문</h3><a class="secondary" href="https://www.cs.cmu.edu/~satya/docdir/kistler-tocs-coda-1992.pdf" target="_blank" rel="noopener noreferrer">출처에서 원문 보기 ↗</a></section>
+  <section><h3>02 한국어 요약 번역</h3><p>파일 시스템의 단절 운영을 설계하고 구현한 연구입니다. 연결되어 있을 때 쓸 파일을 미리 확보하고, 연결이 끊기면 저장한 사본을 사용합니다. 다시 연결되면 그동안의 변경을 서버에 반영합니다.</p></section>
+  <section><h3>03 핵심 발췌 번역</h3><p class="paper-meta">서론 앞 초록 · 단절 운영의 정의</p><blockquote>단절 운영은 공유 저장소에 일시적 장애가 있어도 클라이언트가 중요한 데이터에 계속 접근할 수 있게 하는 운영 방식이다.</blockquote><p><strong>DAOS에서 쓰는 부분</strong> 기사 앱이 미리 받은 배송표와 로봇의 현장 작업표를 사용하는 근거입니다. 로봇이 통로를 쓸 수 있는지는 DAOS가 별도로 판단합니다.</p></section>
+ </div></article>
+<article class="paper" id="bayou"><header><p class="eyebrow">핵심 · 작업 순서 확인</p><h2>Managing Update Conflicts in Bayou, a Weakly Connected Replicated Storage System</h2><p class="paper-meta">Terry 외, 1995 · ACM SOSP</p></header>
+ <div class="paper-sections">
+  <section><h3>01 논문 원문</h3><a class="secondary" href="https://www.csd.uwo.ca/~hlutfiyy/Perv/Papers/terry.pdf" target="_blank" rel="noopener noreferrer">출처에서 원문 보기 ↗</a></section>
+  <section><h3>02 한국어 요약 번역</h3><p>연결이 불안정한 환경에서 데이터를 복제하는 시스템입니다. 변경을 임시 상태로 보여주고, 프로그램이 정의한 조건을 검사합니다. 조건이 맞지 않으면 변경별 병합 절차를 적용합니다.</p></section>
+  <section><h3>03 핵심 발췌 번역</h3><p class="paper-meta">§4.2 Dependency checks · 변경의 전제 조건</p><blockquote>각 쓰기 작업에는 애플리케이션이 제공한 질의와 그 예상 결과로 이루어진 의존성 검사가 포함된다.</blockquote><p><strong>DAOS에서 쓰는 부분</strong> 기사 앱 기록을 받을 때 집하 → 구간 출발 → 배송 완료 순서와 배차 버전을 검사하는 데 참고했습니다.</p></section>
+ </div></article>
+<article class="paper" id="chubby"><header><p class="eyebrow">핵심 · 오래된 명령 차단</p><h2>The Chubby Lock Service for Loosely-Coupled Distributed Systems</h2><p class="paper-meta">Burrows, 2006 · USENIX OSDI</p></header>
+ <div class="paper-sections">
+  <section><h3>01 논문 원문</h3><a class="secondary" href="https://www.usenix.org/legacy/events/osdi06/tech/full_papers/burrows/burrows.pdf" target="_blank" rel="noopener noreferrer">출처에서 원문 보기 ↗</a></section>
+  <section><h3>02 한국어 요약 번역</h3><p>여러 서버가 공유 자원을 조정하도록 잠금 서비스를 제공합니다. 보호된 요청에는 잠금 상태를 나타내는 증표를 붙일 수 있고, 받는 쪽은 권한이 유효한지 검사합니다.</p></section>
+  <section><h3>03 핵심 발췌 번역</h3><p class="paper-meta">§2.4 Locks and sequencers · 권한 증표</p><blockquote>증표에는 잠금 이름, 잠금을 얻은 방식(배타 또는 공유), 잠금의 세대 번호가 들어 있다.</blockquote><p><strong>DAOS에서 쓰는 부분</strong> 로봇 시연에서 연결 복구 뒤 운전 세대를 올리고, 현재 세대와 맞는 권한만 사용하는 설계에 참고했습니다.</p></section>
+ </div></article>
+<article class="paper" id="local-first"><header><p class="eyebrow">참고 · 기기에서 먼저 일하기</p><h2>Local-First Software: You Own Your Data, in spite of the Cloud</h2><p class="paper-meta">Kleppmann 외, 2019 · ACM Onward!</p></header>
+ <div class="paper-sections">
+  <section><h3>01 논문 원문</h3><a class="secondary" href="https://martin.kleppmann.com/papers/local-first.pdf" target="_blank" rel="noopener noreferrer">출처에서 원문 보기 ↗</a></section>
+  <section><h3>02 한국어 요약 번역</h3><p>오프라인 업무와 여러 기기의 협업을 함께 지원하는 소프트웨어 설계 원칙입니다. 로컬 데이터를 중심에 두고 기기 간 병합 기술이 어디에 유용한지 시제품으로 살펴봅니다.</p></section>
+  <section><h3>03 핵심 발췌 번역</h3><p class="paper-meta">초록 · 로컬 우선 설계 목표</p><blockquote>로컬 우선의 목표에는 오프라인 작업과 여러 기기에서의 협업이 포함된다.</blockquote><p><strong>DAOS에서 쓰는 부분</strong> 기사 앱의 현장 기록 저장에 참고했습니다. 배차 승인과 업무 순서 확인은 DAOS 서버가 맡습니다.</p></section>
+ </div></article>
+<article class="paper" id="sessionstore"><header><p class="eyebrow">참고 · 현장 저장소</p><h2>SessionStore: A Session-Aware Datastore for the Edge</h2><p class="paper-meta">Mortazavi 외, 2020 · IEEE ICFEC</p></header>
+ <div class="paper-sections">
+  <section><h3>01 논문 원문</h3><a class="secondary" href="https://www.cs.toronto.edu/~mortazavi/papers/Sessionstore_Mortazavi.pdf" target="_blank" rel="noopener noreferrer">출처에서 원문 보기 ↗</a></section>
+  <section><h3>02 한국어 요약 번역</h3><p>기기가 다른 엣지 저장소로 이동하더라도 자신의 변경과 직전에 본 버전을 계속 볼 수 있게 설계한 저장소입니다. 저장소를 바꿀 때 해당 세션에 필요한 데이터만 대조합니다.</p></section>
+  <section><h3>03 핵심 발췌 번역</h3><p class="paper-meta">초록 · 세션 단위 대조</p><blockquote>복제본을 바꿀 때 해당 세션과 관련된 데이터만 대조한다.</blockquote><p><strong>DAOS에서 쓰는 부분</strong> 구역별 현장 저장소 설계의 참고 자료입니다. 로봇의 완전 단절 운전이나 실물 검증 성능은 별도로 검증합니다.</p></section>
+ </div></article>
+<article class="paper" id="crdt"><header><p class="eyebrow">참고 · 복제 데이터 수렴</p><h2>Approaches to Conflict-free Replicated Data Types</h2><p class="paper-meta">Almeida, 2024 · ACM Computing Surveys · 초고 2023</p></header>
+ <div class="paper-sections">
+  <section><h3>01 논문 원문</h3><a class="secondary" href="https://repositorio.inesctec.pt/server/api/core/bitstreams/d83841fa-9642-4162-aca9-50a7ae7b18e3/content" target="_blank" rel="noopener noreferrer">출처에서 원문 보기 ↗</a></section>
+  <section><h3>02 한국어 요약 번역</h3><p>여러 기기가 각자 수정하고 같은 변경을 받으면 같은 상태로 수렴하도록 설계하는 자료구조를 설명합니다. 변경을 전달하는 방식과 상태를 전달하는 방식의 차이를 다룹니다.</p></section>
+  <section><h3>03 핵심 발췌 번역</h3><p class="paper-meta">초록 · 같은 변경의 수렴</p><blockquote>같은 변경을 받은 복제본은 변경을 받은 순서가 달라도 서로 동등한 상태에 이른다.</blockquote><p><strong>DAOS에서 쓰는 부분</strong> 기록 병합을 이해하는 참고 자료입니다. DAOS의 배차나 통로 권한에는 업무 제약이 있어 별도의 승인과 검사를 사용합니다.</p></section>
+ </div></article>
+<article class="paper" id="afrin"><header><p class="eyebrow">참고 · 로봇 계산 자원 배치</p><h2>Multi-objective resource allocation for Edge Cloud based robotic workflow in smart factory</h2><p class="paper-meta">Afrin 외, 2019 · Future Generation Computer Systems</p></header>
+ <div class="paper-sections">
+  <section><h3>01 논문 원문</h3><a class="secondary" href="https://www.sciencedirect.com/science/article/pii/S0167739X18326785" target="_blank" rel="noopener noreferrer">출처에서 원문 보기 ↗</a></section>
+  <section><h3>02 한국어 요약 번역</h3><p>스마트 공장의 여러 로봇이 수행하는 작업 흐름을 위한 엣지·클라우드 자원 배치 연구입니다. 작업에 필요한 계산을 어디에서 처리할지 여러 기준으로 평가합니다.</p></section>
+  <section><h3>03 핵심 발췌 번역</h3><p class="paper-meta">초록 · 연구의 제안 범위</p><blockquote>스마트 공장의 다중 로봇 작업 흐름에 계산 자원을 할당하는 엣지 클라우드 틀을 제안한다.</blockquote><p><strong>DAOS에서 쓰는 부분</strong> 현장 장비의 자원 배치에 참고합니다. 이 논문의 검증 범위는 자원 할당이며, DAOS의 단절 지속과 복구 대조는 별도 실험 과제입니다.</p></section>
+ </div></article>
+<article class="paper" id="dynamo"><header><p class="eyebrow">참고 · 저장된 복제본 비교</p><h2>Dynamo: Amazon’s Highly Available Key-value Store</h2><p class="paper-meta">DeCandia 외, 2007 · ACM SOSP</p></header>
+ <div class="paper-sections">
+  <section><h3>01 논문 원문</h3><a class="secondary" href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener noreferrer">출처에서 원문 보기 ↗</a></section>
+  <section><h3>02 한국어 요약 번역</h3><p>일시 장애가 나면 다른 노드가 데이터를 대신 보관합니다. 복제본이 서로 달라졌을 때는 머클 트리로 달라진 범위를 좁혀 다시 맞춥니다. 두 과정은 저장 데이터의 가용성과 동기화에 쓰입니다.</p></section>
+  <section><h3>03 핵심 발췌 번역</h3><p class="paper-meta">§4.7 Replica synchronization · 다른 복제본 찾기</p><blockquote>복제본의 불일치를 더 빨리 찾고 전송량을 줄이기 위해 Dynamo는 머클 트리를 사용한다.</blockquote><p><strong>DAOS에서 쓰는 부분</strong> 해시로 비교할 수 있는 것은 저장된 데이터입니다. DAOS 로봇 시연에서는 실물 위치 확인을 가상 스캔으로 따로 보여줍니다.</p></section>
+ </div></article>
+</div>
+<section class="exhibit-section" id="standards"><header class="section-heading"><p class="eyebrow">별도 자료 / 표준 및 실무</p><h2>장비 연동과 기록 전송</h2></header>
+<dl class="evidence-rail">
+<div><dt>VDA 5050</dt><dd>로봇과 관제의 메시지 형식을 정하는 공개 규격입니다. 3.0.0 §6.1.2는 이동이 승인된 구간(Base)과 이후 계획(Horizon)을 구분합니다. <a href="https://github.com/VDA5050/VDA5050/releases/tag/3.0.0">공식 규격 ↗</a></dd></div>
+<div><dt>전송 대기열</dt><dd>배송 결과를 먼저 기기에 보관하고, 서버가 접수를 확인하면 대기 목록에서 제외합니다. 전송 실패 때 기록을 재시도하는 실무 패턴과 연결됩니다. <a href="https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/transactional-outbox.html">AWS 설계 문서 ↗</a></dd></div>
+</dl></section>
+</main><footer class="shell bar"><span>DAOS · 스마트 물류 경진대회</span><a href="/project.html">시스템 설명으로 돌아가기 ↗</a></footer>
+</body></html>

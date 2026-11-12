@@ -86,7 +86,17 @@ function isMobileDevice(device) {
 }
 const mobile = isMobileDevice(navigator);
 document.documentElement.classList.toggle('driver-mobile', mobile);
-const blank = () => ({ snapshot: null, pending: [], confirmed: [], demoOffline: false, baseline: false, baselineEvents: [], completedDays: {} });
+const blank = () => ({ snapshot: null, pending: [], quarantine: [], confirmed: [], demoOffline: false, baseline: false, baselineEvents: [], completedDays: {} });
+function normalizeDb(saved) {
+  const next={...blank(),...saved};
+  const held=new Set(next.unverified??[]);
+  const quarantine=new Map(next.quarantine.map(event=>[event.id,event]));
+  for(const event of next.pending)if(held.has(event.id))quarantine.set(event.id,event);
+  next.pending=next.pending.filter(event=>!quarantine.has(event.id));
+  next.quarantine=[...quarantine.values()];
+  delete next.unverified;
+  return next;
+}
 let db = blank();
 let readError = false;
 let province = DEFAULT_PROVINCE;
@@ -99,7 +109,7 @@ function loadProvince() {
   db=blank();
   try {
     const raw=localStorage.getItem(keyForProvince());
-    if(raw) db=JSON.parse(raw);
+    if(raw) db=normalizeDb(JSON.parse(raw));
     readError=false;
   }catch{readError=true}
 }
@@ -118,12 +128,26 @@ let displayedDate;
 let selected = null;
 let noticeTimer;
 const timezone = { timeZone: 'Asia/Seoul' };
-const DEMO_DATES=['2026-11-09','2026-11-10','2026-11-11','2026-11-12','2026-11-13'];
+const calendarToday=()=>new Intl.DateTimeFormat('sv-SE',{...timezone,dateStyle:'short'}).format(new Date());
+const calendarDays=()=>Array.from({length:5},(_,i)=>new Date(Date.parse(calendarToday())+i*86400000).toISOString().slice(0,10));
 const timeFormat = new Intl.DateTimeFormat('ko-KR', { ...timezone, hour:'2-digit', minute:'2-digit', hour12:false });
 const clockKey=`${KEY_BASE}.clock`;
-let sharedClock={date:DEMO_DATES[0],time:'06:00'};
+let sharedClock={date:calendarToday(),time:'06:00'};
 function updateClock(clock) {
   if(typeof clock?.date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(clock.date)||!Number.isFinite(Date.parse(clock.date))||typeof clock.time!=='string')return false;
+  if(clock.calendarBase && db.calendarBase!==clock.calendarBase){
+    const oldBase=db.calendarBase??'2026-11-09';
+    const days=Math.round((Date.parse(clock.calendarBase)-Date.parse(oldBase))/86400000);
+    const shift=value=>{
+      if(typeof value==='string'&&/^\d{4}-\d{2}-\d{2}(?:$|\/)/.test(value))return new Date(Date.parse(value.slice(0,10))+days*86400000).toISOString().slice(0,10)+value.slice(10);
+      if(Array.isArray(value))return value.map(shift);
+      if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).map(([k,v])=>[shift(k),shift(v)]));
+      return value;
+    };
+    if(!save({...shift(db),calendarBase:clock.calendarBase}))return false;
+    serverJobs=shift(serverJobs);serverEvents=shift(serverEvents);serverSchedule=shift(serverSchedule);
+    selected=null;
+  }
   if(sharedClock.date===clock.date&&sharedClock.time===clock.time)return false;
   if(sharedClock.date!==clock.date)selected=null;
   sharedClock=clock;
@@ -181,14 +205,14 @@ function pruneExpired() {
   if (!snapshot) return false;
   // Older installs may already have completed deliveries without a retention timestamp.
   const known = db.completedDays ?? {};
-  const completions = completedDays(snapshot.jobs, [...db.confirmed, ...db.pending]);
+  const completions = completedDays(snapshot.jobs, [...db.confirmed, ...db.quarantine, ...db.pending]);
   const jobs = snapshot.jobs.filter(job => !expired(completions[job.date]));
   const changed = Object.keys(known).length !== Object.keys(completions).length || Object.keys(completions).some(date => completions[date] !== known[date]);
   if (!changed && jobs.length === snapshot.jobs.length) return false;
   return save({ ...db, snapshot: { ...snapshot, jobs }, completedDays: completions });
 }
 function events() {
-  return db.baseline ? serverEvents : [...db.confirmed, ...db.pending];
+  return db.baseline ? serverEvents : [...db.confirmed, ...db.quarantine, ...db.pending];
 }
 function pickupKey(date) {
   return `${date}/pickup`;
@@ -298,11 +322,13 @@ function render() {
   const verification=$('recovery-check');
   verification.hidden=Boolean(db.baseline);
   if(!db.baseline){
-    const held=(db.unverified??[]).filter(id=>db.pending.some(event=>event.id===id)).length;
+    const held=db.quarantine.length;
     verification.textContent=held?`검증 보류 ${held}건 · 서버에서 순서나 배차 버전을 확인하지 못한 기록은 기기에 남겨 둡니다.`:
       db.pending.length?'미동기화 기록은 서버에서 배차 버전과 집하·배송 순서를 검증한 뒤 확정합니다.':
       '동기화 검증 · 서버가 접수 확인한 기록만 전송 대기에서 제거합니다.';
   }
+  $('retry-held').hidden=Boolean(db.baseline)||!db.quarantine.length;
+  $('retry-held').disabled=!connected||busy;
   const pending = db.baseline ? '' : db.pending.length ? `미동기화 기록 ${db.pending.length}건` : shellReady ? '오프라인 지도 준비됨' : '';
   $('status').innerHTML = `<span class="status-icon" aria-hidden="true">${offline ? '◈' : '✓'}</span><div class="status-text"><strong>${title}</strong> · ${status}</div><span class="sync-count${!db.baseline && db.pending.length ? ' pending-count' : ''}">${pending}</span>`;
   const dates=[displayedDate,tomorrow(displayedDate)];
@@ -312,7 +338,7 @@ function render() {
     ? '<p class="storage-total"><strong>0일치</strong> · 기존 방식에서는 서버에서만 작업표를 조회합니다.</p>'
     : summary;
   const schedule=db.baseline?serverSchedule:db.snapshot?.schedule??[];
-  const scheduledDates=[...new Set([...DEMO_DATES.slice(0,3),displayedDate,...schedule.map(item=>item.date)])].sort();
+  const scheduledDates=[...new Set([...calendarDays().slice(0,3),displayedDate,...schedule.map(item=>item.date)])].sort();
   $('schedule-days').innerHTML=scheduledDates.map(date=>{
     const day=schedule.find(item=>item.date===date);
     const names=date===displayedDate&&dayJobs.length?escape(regionNames(dayJobs)):'';
@@ -377,8 +403,9 @@ function renderDeliveryDetail(job) {
   const state = stateFor(job);
   const label = state === 'delivered' ? '배송 완료됨' : '배송 완료 기록';
   const hasPending = !db.baseline && db.pending.some(event => event.key === job.key);
+  const isHeld = !db.baseline && db.quarantine.some(event=>event.key===job.key);
   const note = state === 'ready' ? '하루치 일괄 집하를 기록하면 배송을 시작할 수 있습니다.'
-    : hasPending ? '기기에 저장됨 · 서버 복구 시 동기화' : '인계 장소와 현장 안내를 확인하세요.';
+    : isHeld ? '서버 검증 보류 · 기기에 보관 중' : hasPending ? '기기에 저장됨 · 서버 복구 시 동기화' : '인계 장소와 현장 안내를 확인하세요.';
   detail.innerHTML = `<div class="detail-title"><h3>${escape(job.title)}</h3><span>${escape(deliveryNumber(job))} · ${SEGMENTS[segmentFor(job)]}</span></div>
     <div class="stop"><small>배송지</small><b>${escape(drop.name)}${drop.building ? ` · ${escape(drop.building)}` : ''}</b><p>${escape(job.to)}</p></div>
     <div class="actions"><button id="record" class="primary" type="button" ${state !== 'picked' || readError || busy ? 'disabled' : ''}>${label}</button><p>${note}</p></div>`;
@@ -453,7 +480,7 @@ async function recordEvent(key, date, state, message) {
     return;
   }
   const pending = [...db.pending, event];
-  const completions = state === 'delivered' ? completedDays(jobsOn(date), [...db.confirmed, ...pending]) : db.completedDays;
+  const completions = state === 'delivered' ? completedDays(jobsOn(date), [...db.confirmed, ...db.quarantine, ...pending]) : db.completedDays;
   if (!save({ ...db, pending, completedDays:completions })) return render();
   toast(message);
   render();
@@ -477,11 +504,6 @@ function refresh(){
 }
 async function loadWork() {
   const removed = pruneExpired();
-  if (!navigator.onLine) {
-    connected = false;
-    if (removed || displayedDate !== workDate()) render();
-    return;
-  }
   const mode = db.baseline ? 'baseline' : 'daos';
   const wasConnected = connected;
   let changed = false;
@@ -490,7 +512,7 @@ async function loadWork() {
     changed=updateClock(clock);
     const requestedDate=workDate();
     if(resetRevision && resetRevision!==db.resetRevision){
-      if(!save({...blank(),resets,resetRevision}))return;
+      if(!save({...blank(),resets,resetRevision,calendarBase:clock.calendarBase}))return;
       selected=null;
       serverJobs=[];
       serverEvents=[];
@@ -504,7 +526,7 @@ async function loadWork() {
     if(cleared.length){
       const previous=Object.fromEntries(Object.entries(db.completedDays??{}).filter(([date])=>!cleared.includes(date)));
       const snapshot=db.snapshot?{...db.snapshot,jobs:db.snapshot.jobs.filter(job=>keep(job))}:null;
-      if(!save({...db,resets,snapshot,pending:db.pending.filter(keep),confirmed:db.confirmed.filter(keep),completedDays:previous}))return;
+      if(!save({...db,resets,snapshot,pending:db.pending.filter(keep),quarantine:db.quarantine.filter(keep),confirmed:db.confirmed.filter(keep),completedDays:previous}))return;
       changed=true;
       toast('취소된 배차와 해당 날짜의 시연 기록을 초기화했습니다.');
     }
@@ -517,23 +539,26 @@ async function loadWork() {
       connected = true;
       return;
     }
-    const previouslyHeld=new Set(db.unverified??[]);
-    const batch=[...db.pending.filter(event=>!previouslyHeld.has(event.id)),...db.pending.filter(event=>previouslyHeld.has(event.id))].slice(0,40);
-    const result = batch.length ? await driverRequest('/events', { mode, events:batch }) : { acknowledged:[] };
-    const acknowledged = new Set(result.acknowledged);
-    const attempted=new Set(batch.map(event=>event.id));
-    const unverified=[...(db.unverified??[]).filter(id=>!attempted.has(id)&&db.pending.some(event=>event.id===id)),...(result.unverified??[])];
+    const revisionChanged=Boolean(db.snapshot&&db.snapshot.revision!==revision);
+    const queue=revisionChanged?[...db.pending,...db.quarantine]:db.pending;
+    const batch=queue.slice(0,40);
+    const result=batch.length?await driverRequest('/events',{mode,events:batch}):{acknowledged:[],unverified:[]};
+    const acknowledged=new Set(result.acknowledged);
+    const rejected=new Set(result.unverified??[]);
+    const held=new Map((revisionChanged?[]:db.quarantine).map(event=>[event.id,event]));
+    for(const event of batch)if(rejected.has(event.id))held.set(event.id,event);
+    const quarantine=[...held.values()];
     const confirmed = [...new Map([...db.confirmed,...remote,...batch.filter(event => acknowledged.has(event.id))]
       .map(event => [event.id,event])).values()];
-    const pending = db.pending.filter(event => !acknowledged.has(event.id));
-    const completions = completedDays(jobs, [...confirmed,...pending]);
+    const pending = db.pending.filter(event=>!acknowledged.has(event.id)&&!held.has(event.id));
+    const completions = completedDays(jobs, [...confirmed,...quarantine,...pending]);
     const retain = (db.snapshot?.jobs ?? []).filter(job => job.date < requestedDate && completions[job.date]);
     const available = [...jobs,...retain].filter(job => !expired(completions[job.date]));
     changed = changed || !db.snapshot || db.snapshot.revision !== revision
       || db.snapshot.date !== requestedDate || JSON.stringify(db.snapshot.schedule)!==JSON.stringify(schedule) || pending.length !== db.pending.length
-      || confirmed.length !== db.confirmed.length || JSON.stringify(unverified)!==JSON.stringify(db.unverified??[]);
+      || confirmed.length !== db.confirmed.length || JSON.stringify(quarantine)!==JSON.stringify(db.quarantine);
     if (changed && !save({ ...db, resets, snapshot:{ at:new Date().toISOString(), date:requestedDate, revision, jobs:available,schedule },
-      pending, confirmed, unverified, completedDays:completions })) return;
+      pending, confirmed, quarantine, completedDays:completions })) return;
     connected = true;
     if (revision && db.snapshot.receipt !== revision) {
       await driverRequest('/receipt', { revision });
@@ -542,8 +567,13 @@ async function loadWork() {
     if (acknowledged.size) toast(`배송 기록 ${acknowledged.size}건을 서버에 동기화했습니다.`);
   } catch(error) {
     connected=false;
-    try{changed=updateClock(await driverRequest('/clock'))||changed}
-    catch{changed=updateClock(error.clock)||changed}
+    // The server may still share the clock during a demonstration outage.
+    // Keep the cached route's date and calendar base until its work request succeeds.
+    let clock=error.clock;
+    if(!clock)try{clock=await driverRequest('/clock')}catch{}
+    if(clock?.date===workDate()&&(!clock.calendarBase||clock.calendarBase===sharedClock.calendarBase)){
+      changed=updateClock(clock)||changed;
+    }
   } finally {
     if (removed || displayedDate !== workDate() || wasConnected !== connected || changed) render();
   }
@@ -589,6 +619,12 @@ $('settings').addEventListener('click', () => {
   panel.hidden = !panel.hidden;
   $('settings').setAttribute('aria-expanded', String(!panel.hidden));
 });
+$('retry-held').addEventListener('click',()=>{
+  if(!connected||busy||refreshInFlight||!db.quarantine.length)return;
+  if(!save({...db,pending:[...db.pending,...db.quarantine],quarantine:[]}))return;
+  render();
+  void refresh();
+});
 $('reset').addEventListener('click', () => {
   if (!confirm('이 기기에 저장된 작업표와 미전송 기록을 지울까요?')) return;
   if (busy || refreshInFlight || !save(blank())) return;
@@ -596,12 +632,12 @@ $('reset').addEventListener('click', () => {
   selected = null;
   void refresh();
 });
-window.addEventListener('offline', () => { connected = false; render(); });
+window.addEventListener('offline', refresh);
 window.addEventListener('online', refresh);
 window.addEventListener('storage', event => {
   if (event.key !== keyForProvince()) return;
   try {
-    db = event.newValue ? JSON.parse(event.newValue) : blank();
+    db = event.newValue ? normalizeDb(JSON.parse(event.newValue)) : blank();
     render();
   } catch {
     readError = true;

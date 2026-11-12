@@ -1,6 +1,6 @@
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 
-const files = ['index.html','project.html','style.css','robots.txt','sitemap.xml',
+const files = ['index.html','project.html','operations.html','papers.html','floor-plan.svg','architecture.svg','style.css','robots.txt','sitemap.xml',
   ...(await readdir('robot')).map(file=>`robot/${file}`)];
 const assets = Object.fromEntries(await Promise.all(files.map(async file=>['/'+file,await readFile(file,'utf8')])));
 await rm('dist',{recursive:true,force:true});

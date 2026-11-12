@@ -1,44 +1,50 @@
 <!doctype html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>DAOS 스마트 물류 | 통합 시연</title>
-  <meta name="description" content="DAOS 스마트 물류의 스토어, 메인 관제센터, 지역 허브, 기사 앱과 물류센터 로봇 관제실을 한곳에서 엽니다.">
-  <link rel="canonical" href="https://daos-logistics.ryker6365.chatgpt.site/">
-  <link rel="stylesheet" href="/style.css?v=5">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DAOS | 스마트 물류 통합 사이트</title>
+<link rel="canonical" href="https://daos-logistics.ryker6365.chatgpt.site/">
+<meta name="description" content="DAOS 시스템 설명, 스토어, 메인 관제센터, 지역 허브, 기사 앱, 물류 현장 시뮬레이터, 논문 자료실을 한곳에서 엽니다.">
+<link rel="stylesheet" href="/style.css?v=12">
 </head>
-<body>
-  <header class="topbar"><div class="shell bar"><a class="brand" href="/">DAOS <span>스마트 물류</span></a><nav aria-label="주 메뉴"><a href="/project.html">프로젝트 소개</a><a href="#systems">운영 화면</a><a href="#warehouse">물류 현장</a><a href="#scenario">시연 순서</a><!-- DAOS_ACCESS --></nav></div></header>
-  <main class="shell">
-    <section class="hero" aria-labelledby="portal-title">
-      <div><p class="eyebrow">DAOS / 통합 시연</p><h1 id="portal-title">주문 접수부터 물류 현장까지</h1><p class="lead">한 주문이 메인 서버, 지역 허브와 기사 앱으로 이어지는 과정과 서버 장애 때 저장된 작업표가 현장에서 쓰이는 모습을 확인하세요.</p>
-      <div class="actions"><a class="primary" href="/project.html">프로젝트 소개 및 기술 검증</a><a class="secondary" href="#systems">운영 화면 선택</a><a class="secondary" href="/open/robot">로봇 관제실 열기 ↗</a></div></div>
-      <aside class="overview" aria-label="시연 구성"><div><span>01 / 배송 운영</span><strong>4개 운영 화면</strong><p>주문 접수 · 허브 전송 · 기사 배차 · 배송</p></div><div><span>02 / 물류 현장</span><strong>로봇 20대</strong><p>하차 · 운반 · 분류 · 출차 배정 · 상차</p></div></aside>
-    </section>
-    <section class="section" id="systems" aria-labelledby="systems-title">
-      <p class="eyebrow">01 / 배송 운영</p><h2 id="systems-title">역할별 운영 화면</h2>
-      <ol class="systems">
-        <li><span class="number">01 / 주문 접수</span><h3>스토어</h3><p>상품과 등록된 배송지를 골라 주문을 접수합니다.</p><a href="/open/shop" target="_blank" rel="noopener noreferrer">스토어 열기 ↗</a></li>
-        <li><span class="number">02 / 서버 제어</span><h3>메인 관제센터</h3><p>주문 원장, 허브 전송, 시연 시각, 서버 연결을 관리합니다.</p><a href="/open/central" target="_blank" rel="noopener noreferrer">메인 관제센터 열기 ↗</a></li>
-        <li><span class="number">03 / 작업 배차</span><h3>지역 허브</h3><p>담당 지역의 주문을 확인하고 배송일과 시간대별 배차를 확정합니다.</p><a href="/open/hub" target="_blank" rel="noopener noreferrer">지역 허브 열기 ↗</a></li>
-        <li><span class="number">04 / 배송 실행</span><h3>기사 앱</h3><p>작업표를 기기에 저장하고 배송을 진행합니다. 복구 후 완료 기록을 전송합니다.</p><a href="/open/driver" target="_blank" rel="noopener noreferrer">기사 앱 열기 ↗</a></li>
-      </ol>
-      <p class="access">ChatGPT에 로그인하고 시연 비밀번호를 한 번 입력하면 아래 메뉴에서 운영 화면을 열 수 있습니다.</p>
-    </section>
-    <section class="section warehouse" id="warehouse" aria-labelledby="warehouse-title"><div>
-      <p class="eyebrow">02 / 물류 현장</p><h2 id="warehouse-title">하나의 출고 배치를 처리하는 로봇 20대</h2><p class="lead">가상 물류센터에서 하차한 상자를 운반·분류·출차 배정·상차 로봇이 이어받습니다. 연결이 끊겨도 자동 저장된 작업표로 같은 출고 배치를 이어서 처리합니다.</p>
-      <ul class="roles"><li>하차 4대</li><li>운반 5대</li><li>분류 4대</li><li>출차 배정 3대</li><li>상차 4대</li></ul>
-    </div><a class="primary" href="/open/robot">로봇 관제실 열기 ↗</a></section>
-    <section class="section" id="scenario" aria-labelledby="scenario-title"><p class="eyebrow">03 / 장애 시연</p><h2 id="scenario-title">작업표 준비부터 연결 복구까지</h2>
-      <ol class="scenario">
-        <li><strong>작업표 준비</strong><p>메인 관제센터에서 날짜와 시각을 맞추고, 지역 허브에서 시연할 주문을 배차 확정합니다.</p></li>
-        <li><strong>현장 시작</strong><p>기사 앱에 배차한 시·도의 작업표가 들어왔는지 확인합니다. 로봇 시연은 별도 출고 배치로 진행합니다.</p></li>
-        <li><strong>서버 연결 끊기</strong><p>기사 시연은 메인 관제센터에서 연결을 끊습니다. 로봇 시연은 관제실에서 시연 서버 연결을 끊습니다. DAOS를 켜면 약 1초 동안 전환한 뒤 자동 저장된 작업표로 다시 움직입니다.</p></li>
-        <li><strong>연결 복구</strong><p>각 시연의 연결을 복구한 뒤, 기사 앱의 미동기화 건수와 로봇 관제실의 공정 기록을 확인합니다.</p></li>
-      </ol>
-    </section>
-  </main>
-  <footer class="shell bar"><span>DAOS · 스마트 물류 경진대회</span><a href="https://github.com/Hue-0825/DAOS" target="_blank" rel="noopener noreferrer">GitHub 저장소 ↗</a></footer>
+<body class="contest portal-home">
+<header class="topbar">
+  <div class="shell bar">
+    <a class="brand" href="/" aria-current="page">DAOS <span>스마트 물류</span></a>
+    <nav aria-label="메인 메뉴"><a href="/project.html">시스템 설명</a><a href="#systems">운영 사이트</a><a href="/open/robot">물류 현장 시뮬레이터</a><a href="/papers.html">논문 자료실</a><!-- DAOS_ACCESS --></nav>
+  </div>
+</header>
+<main class="shell">
+  <section class="arrival-hero" aria-labelledby="arrival-title">
+    <div class="arrival-copy">
+      <p class="eyebrow">DAOS · 분산형 자율운영 시스템</p>
+      <h1 id="arrival-title">서버가 멈춘 순간에도,<br>물류는 이어지도록.</h1>
+      <p class="arrival-lead">다음 작업을 미리 현장에 저장합니다.<br>연결이 끊기면 저장된 데이터로 작업을 이어가고,<br>복구되면 그동안의 기록을 서버와 맞춥니다.</p>
+      <div class="actions"><a class="primary" href="/project.html">시스템 알아보기 <span aria-hidden="true">↗</span></a><a class="arrival-text-link" href="/open/robot">물류 현장 장애 대응 시연 <span aria-hidden="true">→</span></a></div>
+      <p class="arrival-footnote">사전에 허용된 작업과 유효시간 안에서 작동하는 웹 시뮬레이션입니다.</p>
+    </div>
+    <figure class="arrival-visual">
+      <div class="drawing-heading"><span>연결이 끊긴 뒤의 물류 현장</span><span>01 / DAOS</span></div>
+      <img src="/floor-plan.svg?v=2" alt="중앙 서버 연결이 끊겨도 현장 백업 작업표를 이용해 입고, 운반, 출고를 이어가는 물류센터 그림" width="600" height="348">
+      <figcaption><span>사전 저장</span><b aria-hidden="true">→</b><span>현장 작업 지속</span><b aria-hidden="true">→</b><span>복구 후 대조</span></figcaption>
+    </figure>
+  </section>
+  <section class="arrival-access" id="systems" aria-labelledby="operations-title">
+    <div class="arrival-section-head"><div><p class="eyebrow">주문에서 배송까지</p><h2 id="operations-title">직접 따라가 보는 물류의 흐름</h2></div><a href="/operations.html">시연 순서 보기 ↗</a></div>
+    <ol class="arrival-stations">
+      <li><a href="/open/shop" target="_blank" rel="noopener noreferrer"><span class="station-step">01 · 주문</span><strong>스토어 <span aria-hidden="true">↗</span></strong><p>고객이 상품을 고르고 주문합니다.</p></a></li>
+      <li><a href="/open/central" target="_blank" rel="noopener noreferrer"><span class="station-step">02 · 취합</span><strong>메인 관제센터 <span aria-hidden="true">↗</span></strong><p>주문을 모아 지역별로 전달합니다.</p></a></li>
+      <li><a href="/open/hub" target="_blank" rel="noopener noreferrer"><span class="station-step">03 · 배차</span><strong>지역 허브 <span aria-hidden="true">↗</span></strong><p>배송할 물량을 기사에게 배정합니다.</p></a></li>
+      <li><a href="/open/driver" target="_blank" rel="noopener noreferrer"><span class="station-step">04 · 배송 / 모바일</span><strong>기사 앱 <span aria-hidden="true">↗</span></strong><p>저장된 작업표로 배송을 진행합니다.</p></a></li>
+    </ol>
+  </section>
+  <section class="arrival-reading" aria-label="DAOS 더 살펴보기">
+    <a href="/project.html"><span class="eyebrow">설계</span><h2>어떻게 이어갈 수 있을까? <span aria-hidden="true">↗</span></h2><p>중앙·엣지·로봇의 역할과 장애 대응 원리를 그림으로 살펴봅니다.</p></a>
+    <a href="/open/robot"><span class="eyebrow">실험</span><h2>연결을 끊어 보면 <span aria-hidden="true">↗</span></h2><p>물류 현장 시뮬레이터에서 DAOS 사용 전후의 움직임을 비교합니다.</p></a>
+    <a href="/papers.html"><span class="eyebrow">근거</span><h2>설계의 바탕이 된 연구 <span aria-hidden="true">↗</span></h2><p>논문 원문과 한국어 요약, 적용한 부분의 발췌 번역을 읽습니다.</p></a>
+  </section>
+</main>
+<footer class="shell bar"><span>DAOS · 스마트 물류 경진대회</span><a href="https://github.com/Hue-0825/DAOS" target="_blank" rel="noopener noreferrer">GitHub 저장소 ↗</a></footer>
 </body>
 </html>

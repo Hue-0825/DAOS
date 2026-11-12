@@ -1,4 +1,4 @@
-import {PARKING,RACKS,SIZE,STAGES,BELTS,inFloor,ARM_CYCLE_SECONDS} from './warehouse-engine.mjs?v=21';
+import {PARKING,RACKS,SIZE,STAGES,BELTS,inFloor,ARM_CYCLE_SECONDS} from './warehouse-engine.mjs?v=22';
 
 const W=1320,H=700;
 const project=(x,y,z=0)=>[540+(x-y)*20,69+(x+y)*10.7-z];
@@ -333,8 +333,8 @@ export function createScene(canvas){
     ctx.restore();
     if(recordHit)text(ctx,robot.id,sx,sy+17,top,11,'center');
   }
-  function drawBubbles(sim,selected,manualStop){
-    const phase=sim.offlinePhase()??'online';
+  function drawBubbles(sim,selected,manualStop,now){
+    const phase=sim.offlinePhase(now)??'online';
     const backup=phase==='backup';
     const stopped=phase==='stopped'||manualStop;
     const recovery=phase==='recovering'?recoveryBubbles[sim.recoveryPhase]:null;
@@ -407,8 +407,8 @@ export function createScene(canvas){
     }
   }
 
-  function draw(sim,selected,manualStop=false){
-    lastFrame=[sim,selected,manualStop];
+  function draw(sim,selected,manualStop=false,now=Date.now(),paused=false){
+    lastFrame=[sim,selected,manualStop,now,paused];
     armHitAreas.clear();
     ctx.clearRect(0,0,W,H);
     ctx.drawImage(backdrop,0,0);
@@ -417,18 +417,19 @@ export function createScene(canvas){
       const points=[focused.position,...focused.route].map(([x,y])=>project(x,y));
       line(ctx,points,STAGES[focused.stage].color,1.5,[4,5]);
     }
-    const cargo=[...sim.buffers()].map(({point:[x,y],count,stage})=>({depth:x+y-.18,draw:target=>{
+    const cargo=[...sim.buffers()].map(({point:[x,y],count,held,stage})=>({depth:x+y-.18,draw:target=>{
       const [sx,sy]=project(x+.36,y-.27);
       const base=stage===2?10:stage===3?3:0;
       for(let i=0;i<Math.min(2,count);i++)prism(target,x+.19,y-.46,.43,.38,base+i*5,5,boxes[stage%boxes.length]);
-      if(count>1)text(target,String(count),sx+8,sy-7,'#fff2cc',10,'center');
+      if(held)sign(target,`보류 ${held}`,x+.38,y-.25,'#ff9aa6');
+      else if(count>1)text(target,String(count),sx+8,sy-7,'#fff2cc',10,'center');
     }}));
     const beltCargo=[...sim.jobs.values()].filter(job=>job.belt).map(job=>{
       const belt=job.belt,x=belt.from[0]+(belt.to[0]-belt.from[0])*belt.progress,y=belt.from[1];
       return {depth:x+y+.4,draw:target=>{prism(target,x-.22,y-.22,.44,.44,10,8,boxes[0]);line(target,[project(x,y-.22,18),project(x,y+.22,18)],'#f7dba0',2);}};
     });
-    const phase=sim.offlinePhase()??'online';
-    const running=phase==='online'||phase==='backup';
+    const phase=sim.offlinePhase(now)??'online';
+    const running=!paused&&(phase==='online'||phase==='backup');
     const movingBelts=new Set([...sim.jobs.values()].filter(job=>job.belt).map(job=>job.belt.id));
     const conveyors=BELTS.map(belt=>({
       depth:belt.from[0]+belt.from[1]+.18,
@@ -438,7 +439,7 @@ export function createScene(canvas){
       .sort((a,b)=>a.depth-b.depth);
     for(const object of sorted)object.draw(ctx);
     for(const label of signs)sign(ctx,...label);
-    drawBubbles(sim,selected,manualStop);
+    drawBubbles(sim,selected,manualStop,now);
     // A stable equipment detail view makes each machine identifiable at desktop size.
     if(focused){
       ctx.fillStyle='#171e34ee';ctx.strokeStyle='#65588f';ctx.lineWidth=1;

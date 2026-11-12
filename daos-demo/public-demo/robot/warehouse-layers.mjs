@@ -58,16 +58,22 @@ export class ZoneEdge {
     this.label=label;
     this.alive=true;
     this.claims=0;
+    this.reservations=new Map();
     this.log=new Map();
     this.conflicts=new Set();
     this.clock=new HybridClock();
   }
 
-  reserve(cell,occupied) {
-    if(!this.alive||occupied.has(cell))return false;
+  reserve(cell,robotId,occupied,requireEdge) {
+    if((requireEdge&&!this.alive)||occupied.has(cell)||this.reservations.has(cell))return false;
+    this.reservations.set(cell,robotId);
     occupied.add(cell);
     this.claims++;
     return true;
+  }
+
+  release(cell,robotId) {
+    if(this.reservations.get(cell)===robotId)this.reservations.delete(cell);
   }
 
   receive(event,epoch,now) {

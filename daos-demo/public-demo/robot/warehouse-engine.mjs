@@ -1,4 +1,4 @@
-import {CentralPlan,ZoneEdge,ZONES,zoneOf,covers,HybridClock,sameEvent} from './warehouse-layers.mjs?v=8';
+import {CentralPlan,ZoneEdge,ZONES,zoneOf,covers,HybridClock,sameEvent} from './warehouse-layers.mjs?v=9';
 
 export const SIZE = [32, 23];
 export const RACKS = [1,7,14,20].flatMap(y => [10,14].map(x => [x,y,2,1]));
@@ -48,6 +48,8 @@ export const OUTAGE_ALERT_MS = 1000;
 export const RECOVERY_STEP_MS = 1000;
 export const BACKUP_LIFETIME_MS = 45000;
 const BACKUP_REFRESH_MS = 10000;
+const CLEARANCE_WINDOW_MS=6500;
+const STEP_MS=350;
 
 export class Warehouse {
   constructor(now=Date.now(), {compact=false}={}) {
@@ -63,6 +65,7 @@ export class Warehouse {
     this.recoveryPhase = null;
     this.physicalScans = new Map();
     this.localTransfers = [];
+    this.scanFaults=new Set();
     this.audit = null;
     this.simTime = 0;
     this.beltTime = 0;
@@ -86,6 +89,7 @@ export class Warehouse {
     this.pending = 0;
     this.synced = 0;
     this.resetFleet();
+    for(const robot of this.robots)this.edges[zoneOf(robot.cell)].reservations.set(key(robot.cell),robot.id);
     const opening = compact?[[2,5],[3,0],[3,5],[3,2],[3,0]]:[[38,5],[5,0],[4,5],[3,2],[4,0]];
     for (const [stage,[count,start]] of opening.entries()) {
       for (let i=0; i<count; i++) {
@@ -129,6 +133,19 @@ export class Warehouse {
       this.sendBackup(now,false);
     }
   }
+  injectRecoveryFault(kind,now=this.now) {
+    if(this.mode!=='offline'||!['scan','replica'].includes(kind))return null;
+    const event=[...this.localTransfers].reverse().find(item=>!this.jobs.get(item.taskId).auditHold
+      &&!this.scanFaults.has(item.taskId)&&this.edges[item.zone].matches(item));
+    if(!event)return null;
+    if(kind==='scan')this.scanFaults.add(event.taskId);
+    else this.edges[event.zone].log.delete(event.eventId);
+    const title=kind==='scan'?'가상 스캔 오류 주입':'엣지 복제 누락 주입';
+    this.recordSpecial('notice',title,`상자 ${event.taskId} · 복구 시 보류 여부를 확인합니다.`,now);
+    this.note('시연',`${title} · 상자 ${event.taskId}`);
+    return event.taskId;
+  }
+
   inventoryPositions() {
     return new Map([...this.jobs].map(([id,job])=>{
       const scan=this.physicalScans.get(id);
@@ -160,6 +177,10 @@ export class Warehouse {
     this.recoveryAt = now;
     this.recoveryPhase = 'stop';
     const positions=this.inventoryPositions();
+    for(const id of this.scanFaults){
+      const snapshot=positions.get(id);
+      if(snapshot?.scan)snapshot.scan.location='SCAN-MISMATCH';
+    }
     const changed=[...positions].filter(([id,position])=>
       JSON.stringify(position)!==JSON.stringify(this.centralLocations.get(id)));
     this.positionPacket={epoch:this.epoch,capturedAt:now,positions,changed,received:false};
@@ -221,7 +242,10 @@ export class Warehouse {
         this.centralLocations.set(id,position);
       }else{
         job.auditHold=true;
+        const robot=this.robots.find(item=>item.job===job);
+        if(robot)robot.stations=[];
         held++;
+        this.recordSpecial('notice','복구 검증 · 상자 격리',`상자 ${id} · 위치 또는 기록 불일치로 확인 보류`,now);
       }
       results.push({taskId:id,agreed,events:chain});
     }
@@ -233,6 +257,7 @@ export class Warehouse {
     this.synced+=confirmedEvents;
     this.pending=0;
     this.localTransfers=[];
+    this.scanFaults.clear();
     for(const edge of this.edges){edge.log.clear();edge.conflicts.clear();edge.claims=0;}
     this.backup.clear();
     this.backupAt = null;
@@ -243,14 +268,23 @@ export class Warehouse {
   get backupRemaining() {
     return [...this.backup].filter(id=>{const job=this.jobs.get(id);return !job.auditHold&&job.stage<STAGES.length;}).length;
   }
+  get backupStagesRemaining() {
+    return [...this.backup].reduce((total,id)=>{
+      const job=this.jobs.get(id);
+      return total+(job.auditHold?0:STAGES.length-job.stage);
+    },0);
+  }
   buffers() {
     const buffers=new Map();
     for(const job of this.jobs.values()){
-      if(job.robot || job.belt || job.stage===0 || job.stage>=STAGES.length)continue;
-      const point=job.stage===1?this.station(1,job):job.stage===2?this.station(2,job):this.station(3,job);
+      if(job.belt||job.stage>=STAGES.length&&!job.auditHold)continue;
+      const robot=job.robot&&this.robots.find(item=>item.id===job.robot);
+      if(robot&&!robot.fetching)continue;
+      const point=job.stage>=STAGES.length?this.station(4,job):job.stage===4?this.pickupFor(4,job):this.station(job.stage,job);
       const id=key(point);
-      const buffer=buffers.get(id)??{point,count:0,stage:job.stage};
+      const buffer=buffers.get(id)??{point,count:0,held:0,stage:job.stage};
       buffer.count++;
+      if(job.auditHold)buffer.held++;
       buffers.set(id,buffer);
     }
     return buffers.values();
@@ -343,6 +377,8 @@ export class Warehouse {
     if (phase==='waiting') return '작업표 대기';
     if (phase==='drained') return '작업 완료';
     if(robot.lastCheck?.ok===false&&!robot.job)return '불일치 · 확인 대기';
+    if(robot.clearance)return '만료 전 통로 비우기';
+    if(robot.yieldTarget||robot.yieldUntil>this.simTime)return '통로 양보 중';
     if(robot.checking)return '2차 검증 · 스캔 대조';
     if(robot.checkUntil>this.simTime)return '2차 검증 통과';
     if (!robot.job) return key(robot.cell)===key(robot.home)?'인계 대기':'복귀 중';
@@ -358,9 +394,9 @@ export class Warehouse {
     if(!needsEdge)return 'GREEN';
     return this.edges[1].alive?'YELLOW':'RED';
   }
-  setSharedEdge(alive) {
+  setSharedEdge(alive,now=this.now) {
     this.edges[1].alive=alive;
-    this.recordSpecial('notice',alive?'공유 통로 엣지 복구':'공유 통로 엣지 장애',alive?'통로 예약과 새 로그 복제가 재개됩니다.':'공유 통로의 추가 승인이 필요한 작업을 보류합니다.');
+    this.recordSpecial('notice',alive?'공유 통로 엣지 복구':'공유 통로 엣지 장애',alive?'통로 예약과 새 로그 복제가 재개됩니다.':'공유 통로의 추가 승인이 필요한 작업을 보류합니다.',now);
     this.note('공유 통로 엣지',alive?'연결 복구 · 새 인계 기록 복제 재개':'연결 끊김 · 공유 통로 협상 불가');
   }
   tick(dt,now=Date.now()) {
@@ -373,28 +409,49 @@ export class Warehouse {
     this.advanceBelts(dt,now);
     const occupied = new Set(this.robots.flatMap(robot => [key(robot.cell),...(robot.next?[key(robot.next)]:[])]));
     const reserved = new Set(this.robots.flatMap(robot=>robot.stations));
+    const fixedCells = new Set(this.robots.filter(robot=>STAGES[robot.stage].fixed||robot.job?.auditHold).map(robot=>key(robot.cell)));
+    const remaining=this.backupAt+BACKUP_LIFETIME_MS-now;
+    const clearing=phase==='backup'&&remaining<=CLEARANCE_WINDOW_MS;
+    const noBlocks=new Set();
+
     for (const robot of this.robots) {
       if(robot.job?.auditHold)continue;
-      if(phase==='backup'&&robot.job){
-        const points=[robot.cell,robot.target];
+      if(!clearing)robot.clearance=null;
+      if(clearing&&zoneOf(robot.cell)===1&&!robot.clearance&&!STAGES[robot.stage].fixed){
+        const exits=[10,22].flatMap(x=>[robot.cell[1],robot.cell[1]-1,robot.cell[1]+1].map(y=>[x,y]));
+        const routes=exits.filter(point=>inFloor(point)&&!reserved.has(key(point))
+          &&this.central.canRoute(robot,point))
+          .map(point=>pathTo(robot.cell,point,occupied,point=>this.central.canRoute(robot,point)))
+          .filter(route=>route.length&&route.length*STEP_MS+500<=remaining)
+          .sort((a,b)=>a.length-b.length);
+        if(routes.length)robot.clearance=routes[0].at(-1);
+      }
+      if(clearing&&!robot.next&&!robot.clearance)continue;
+      if(phase==='backup'&&robot.job&&!robot.next){
+        const points=[robot.cell,robot.clearance??robot.target];
         if(robot.next)points.push(robot.next);
         robot.drg=this.classify(robot,robot.job,points,now,350);
         if(robot.drg==='RED')continue;
       }
-      if (!robot.job && !robot.next && key(robot.cell)===key(robot.home)) {
+      if (!clearing&&!robot.job && !robot.next && key(robot.cell)===key(robot.home)) {
         for (const job of this.jobs.values()) {
           if (job.robot || job.belt || job.auditHold || (STAGES[robot.stage].fixed && job.segment!==Number(robot.id.slice(-1))-1) || job.stage!==robot.stage || (!this.backup.has(job.id)&&this.mode==='offline') || !this.canHandoff(job)) continue;
           const pickup = this.pickupFor(robot.stage,job);
           const goal = this.goalFor(robot.stage,job);
           const points=pickup?[pickup,goal]:[goal];
           if(phase==='backup'){
-            const route=[...points,robot.cell];
-            const hops=route.slice(0,-1).reduce((sum,[x,y],i)=>sum+Math.abs(x-route[i+1][0])+Math.abs(y-route[i+1][1]),0);
-            robot.drg=this.classify(robot,job,route,now,6000+hops*400);
+            const waypoints=[robot.cell,...points];
+            const distance=points.reduce((sum,point,i)=>{
+              const origin=waypoints[i];
+              if(key(origin)===key(point))return sum;
+              const route=pathTo(origin,point,noBlocks,cell=>this.central.canRoute(robot,cell));
+              return sum+(route.length||Infinity);
+            },0);
+            robot.drg=this.classify(robot,job,waypoints,now,6000+distance*STEP_MS+4_500);
             if(robot.drg==='RED')continue;
           }
           const stations = points.map(key);
-          if (stations.some(id=>reserved.has(id)||(occupied.has(id)&&id!==key(robot.cell)))) continue;
+          if (stations.some(id=>reserved.has(id)||fixedCells.has(id)&&id!==key(robot.cell))) continue;
           robot.job = job;
           job.robot = robot.id;
           robot.work = 0;
@@ -406,7 +463,7 @@ export class Warehouse {
           break;
         }
       }
-      if (!robot.next && key(robot.cell) === key(robot.target) && robot.job) {
+      if (!clearing&&!robot.yieldTarget&&!robot.next && key(robot.cell) === key(robot.target) && robot.job) {
         const job = robot.job;
         if(phase==='backup'&&!this.central.permits(robot,job,[robot.cell],this.epoch,now,robot.checked?2500:5000)){robot.drg='RED';continue;}
         if(!robot.checked){
@@ -443,27 +500,59 @@ export class Warehouse {
         robot.stations = [];
         continue;
       }
-      if (!robot.next && key(robot.cell)!==key(robot.target)) {
-        robot.route = pathTo(robot.cell,robot.target,occupied,point=>this.central.canRoute(robot,point));
-        robot.next = robot.route[0] ?? null;
-        if (robot.next) {
-          const cell=key(robot.next);
-          if(phase==='backup'){
-            const decision=this.classify(robot,robot.job,[robot.cell,robot.next],now,350);
-            robot.drg=decision;
-            if(decision==='RED')robot.next=null;
-            else if(decision==='YELLOW'){
-              if(!this.edges[1].reserve(cell,occupied))robot.next=null;
-            }else occupied.add(cell);
-          } else occupied.add(cell);
+      if(!robot.next){
+        if(robot.yieldTarget&&key(robot.cell)===key(robot.yieldTarget)){
+          robot.yieldTarget=null;
+          robot.yieldUntil=this.simTime+1.1;
         }
-      }
-      if (!robot.next) {
-        robot.route = [];
-        continue;
+        if(robot.yieldUntil>this.simTime)continue;
+        const target=robot.clearance??robot.yieldTarget??robot.target;
+        if(key(robot.cell)===key(target)){robot.route=[];continue;}
+        const allowed=point=>this.central.canRoute(robot,point);
+        const route=pathTo(robot.cell,target,occupied,allowed);
+        if(!route.length){
+          const intended=pathTo(robot.cell,target,noBlocks,allowed);
+          robot.route=intended;
+          robot.blockedFor=(robot.blockedFor??0)+dt;
+          if(!clearing&&robot.blockedFor>=.65&&intended.length){
+            const corridor=new Set(intended.map(key));
+            const side=this.findYield(robot.cell,occupied,reserved,corridor,allowed);
+            if(side){
+              robot.yieldTarget=side;
+              robot.blockedFor=0;
+              this.recordSpecial('notice','통로 양보',`${robot.id} · 빈 대기 칸으로 이동 후 재시도`,now);
+            }
+          }
+          continue;
+        }
+        robot.blockedFor=0;
+        robot.route=route;
+        const next=route[0],zone=zoneOf(next);
+        if(phase==='backup'){
+          const decision=this.classify(robot,robot.job,[robot.cell,next],now,STEP_MS);
+          robot.drg=decision;
+          if(decision==='RED'||remaining<STEP_MS+500)continue;
+        }
+        if(this.edges[zone].reserve(key(next),robot.id,occupied,phase==='backup'))robot.next=next;
       }
       this.advanceRobot(robot,dt,occupied);
     }
+  }
+  findYield(start,occupied,reserved,corridor,allowed) {
+    const seen=new Set([key(start)]);
+    const queue=[{point:start,depth:0}];
+    for(const {point,depth} of queue){
+      if(depth>=5)continue;
+      for(const next of nextCells(point)){
+        const id=key(next);
+        if(seen.has(id)||occupied.has(id)||walls.has(id)||reserved.has(id)||!allowed(next))continue;
+        seen.add(id);
+        const exits=nextCells(next).filter(cell=>allowed(cell)&&!walls.has(key(cell))&&!occupied.has(key(cell)));
+        if(!corridor.has(id)&&exits.length>=2)return next;
+        queue.push({point:next,depth:depth+1});
+      }
+    }
+    return null;
   }
   verifyHandoff(robot,job){
     const record=this.handoffRecords.get(job.id),scan=this.physicalScans.get(job.id);
@@ -524,6 +613,7 @@ export class Warehouse {
     robot.position = robot.cell.map((value,i)=>value+(robot.next[i]-value)*robot.progress);
     if (robot.progress === 1) {
       occupied?.delete(key(robot.cell));
+      this.edges[zoneOf(robot.cell)].release(key(robot.cell),robot.id);
       robot.cell = robot.next;
       robot.next = null;
       robot.progress = 0;

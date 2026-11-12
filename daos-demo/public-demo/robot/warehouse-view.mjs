@@ -1,5 +1,5 @@
-import {BATCH,STAGES,Warehouse,BACKUP_LIFETIME_MS} from './warehouse-engine.mjs?v=21';
-import {createScene} from './warehouse-scene.mjs?v=24';
+import {BATCH,STAGES,Warehouse,BACKUP_LIFETIME_MS} from './warehouse-engine.mjs?v=22';
+import {createScene} from './warehouse-scene.mjs?v=25';
 
 const $=id=>document.getElementById(id);
 const canvas=$('warehouse');
@@ -17,7 +17,7 @@ const INCIDENTS={
   backup:['DAOS','DAOS 가동 중 · 백업 데이터로 작업 계속','서버가 끊기기 전에 저장한 작업표와 구역 점유권으로 상자 운반과 인계를 이어갑니다.'],
   stopped:['■','안전 정지 · DAOS 꺼짐','현재 위치에서 대기합니다. 서버를 복구하거나 DAOS를 켜면 조건에 따라 작업을 이어갑니다.'],
   waiting:['…','백업 작업표 미수신','서버를 복구한 뒤 오른쪽 위에서 백업 작업표를 전송해 주세요.'],
-  expired:['■','백업 작업표 만료 · 안전 정지','예약한 이동 칸까지만 도달한 뒤 대기합니다. 연결 복구 후 기록을 대조합니다.'],
+  expired:['■','백업 작업표 만료 · 안전 정지','만료 전 권한과 통로가 확보된 로봇은 통로를 비웁니다. 만료 뒤에는 정지하고 복구를 기다립니다.'],
   drained:['✓','현장 작업표 처리 완료','저장한 물량의 상차를 마쳤습니다. 다음 작업표를 받으려면 연결을 복구해 주세요.'],
 };
 const WORK_SOURCES={
@@ -66,8 +66,17 @@ const modeColors={online:'var(--timeline-online)',outage:'var(--timeline-outage)
 const TIMELINE_REFERENCE_MS=60_000;
 const EMPTY_ARC_COLOR='#e6e3ef';
 let timelineFinishedAt=null;
-let timelinePausedAt=paused?sim.startedAt:null;
-const timelinePauses=[];
+let pausedAt=paused?sim.startedAt:null;
+let pausedDuration=0;
+let centralOnline=null;
+let localOutage=false;
+let centralChecked=false;
+let centralReachable=false;
+let lastCentralPoll=-Infinity;
+let centralRequest=false;
+function demoNow(wall=Date.now()){
+  return (pausedAt??wall)-pausedDuration;
+}
 let timelineSession=null;
 let timelineSize=-1;
 
@@ -77,19 +86,12 @@ function elapsedLabel(ms,precise=false){
   return precise?`${stamp}.${Math.floor(Math.max(0,ms)%1000/100)}`:stamp;
 }
 
-function timelineElapsedAt(wall){
-  const pausedDuration=timelinePauses.reduce((duration,[start,end])=>
-    duration+Math.max(0,Math.min(end,wall)-start),0);
-  const currentPause=timelinePausedAt===null?0:Math.max(0,wall-timelinePausedAt);
-  return Math.max(0,wall-sim.startedAt-pausedDuration-currentPause);
-}
-
 function paintOverview(finished,total){
-  if(timelineSession!==sim)timelineFinishedAt=null;
-  const wall=Date.now();
+  if(timelineSession!==sim||finished<total)timelineFinishedAt=null;
+  const wall=demoNow();
   if(finished===total&&timelineFinishedAt===null)timelineFinishedAt=wall;
   const now=timelineFinishedAt??wall;
-  const elapsed=timelineElapsedAt(now);
+  const elapsed=Math.max(0,now-sim.startedAt);
   const fill=timelineFinishedAt!==null?100:Math.min(98,elapsed/TIMELINE_REFERENCE_MS*100);
   const mode=sim.operatingMode;
   const overview=$('overview-mode');
@@ -111,8 +113,8 @@ function paintOverview(finished,total){
       row.dataset.kind=event.kind;
       const time=document.createElement('time');
       time.dateTime=new Date(event.now).toISOString();
-      time.textContent=`+${elapsedLabel(timelineElapsedAt(event.now),true)}`;
-      time.title=new Date(event.now).toLocaleTimeString('ko-KR',{hour12:false});
+      time.textContent=`+${elapsedLabel(Math.max(0,event.now-sim.startedAt),true)}`;
+      time.title='일시정지를 제외한 시연 경과 시간';
       const body=document.createElement('div'), title=document.createElement('strong'), detail=document.createElement('p');
       title.textContent=event.title;
       detail.textContent=event.detail;
@@ -124,13 +126,13 @@ function paintOverview(finished,total){
   const stops=[], descriptions=[];
   transitions.forEach((event,index)=>{
     const end=transitions[index+1]?.now??now;
-    const startElapsed=timelineElapsedAt(event.now);
-    const endElapsed=timelineElapsedAt(end);
+    const startElapsed=Math.max(0,event.now-sim.startedAt);
+    const endElapsed=Math.max(0,end-sim.startedAt);
     if(endElapsed<=startElapsed)return;
     const startAngle=startElapsed/Math.max(elapsed,1)*fill;
     const endAngle=endElapsed/Math.max(elapsed,1)*fill;
     stops.push(`${modeColors[event.mode]} ${startAngle}% ${endAngle}%`);
-    descriptions.push(`${modes[event.mode]} ${elapsedLabel(timelineElapsedAt(event.now),true)} ~ ${elapsedLabel(endElapsed,true)}`);
+    descriptions.push(`${modes[event.mode]} ${elapsedLabel(Math.max(0,event.now-sim.startedAt),true)} ~ ${elapsedLabel(endElapsed,true)}`);
   });
   if(fill<100)stops.push(`${EMPTY_ARC_COLOR} ${fill}% 100%`);
   timeline.style.background=`conic-gradient(${stops.join(', ')})`;
@@ -140,8 +142,9 @@ function paintOverview(finished,total){
 }
 
 function paint(){
-  const online=sim.mode==='online',phase=sim.offlinePhase()??'online';
-  const alarm=sim.alarmActive();
+  const now=demoNow();
+  const online=sim.mode==='online',phase=sim.offlinePhase(now)??'online';
+  const alarm=sim.alarmActive(now);
   const manualStop=online&&paused&&!sim.daosEnabled;
   const warningStop=phase==='stopped'||manualStop;
   const recoveryStatus={
@@ -152,7 +155,7 @@ function paint(){
   const [icon,title,detail]=manualStop
     ?['Ⅱ','일시정지 · DAOS 꺼짐','로봇과 컨베이어가 멈췄습니다. 계속 실행을 누르면 시연을 재개합니다.']
     :phase==='recovering'?recoveryStatus[sim.recoveryPhase]:INCIDENTS[phase];
-  const jobs=[...sim.jobs.values()],finished=jobs.filter(job=>job.stage===STAGES.length).length;
+  const jobs=[...sim.jobs.values()],finished=jobs.filter(job=>job.stage===STAGES.length&&!job.auditHold).length;
   paintOverview(finished,jobs.length);
   const connection=$('connection');
   $('mode').dataset.mode=sim.mode;
@@ -175,7 +178,11 @@ function paint(){
   connection.dataset.recover=String(sim.mode==='offline');
   set('daos-value',sim.daosEnabled?'ON':'OFF');
   set('pause',paused?'계속 실행':'일시정지');
-  set('connection',sim.mode!=='offline'?'시연 서버 연결 끊기':'시연 서버 연결 복구');
+  connection.disabled=centralOnline===false;
+  set('connection',centralOnline===false?'메인 관제센터에서 연결 복구':localOutage?'시연 서버 연결 복구':'시연 서버 연결 끊기');
+  set('central-connection-status',centralOnline===false?'메인 관제센터 · 서버 장애 감지':
+    centralChecked?(centralReachable?'메인 관제센터 · 연결 상태 공유 중':'메인 관제센터 확인 불가 · 로컬 시연 가능'):'메인 관제센터 상태 확인 중');
+  for(const id of ['fault-scan','fault-replica'])$(id).disabled=sim.mode!=='offline'||!sim.localTransfers.length;
   set('mode',sim.mode==='recovering'?'서버 연결됨 · 안전 전환 중':online?'시연 서버 연결됨':'시연 서버 연결 끊김');
   set('incident-icon',icon);
   set('incident-title',title);
@@ -183,8 +190,8 @@ function paint(){
   set('drive-mode',manualStop?'일시정지':{recovering:'메인 전환 · 안전 정지',online:'정상 운전',handover:'운전 전환',backup:'DAOS 백업 운전',stopped:'안전 정지',waiting:'백업 대기',expired:'유효기간 만료',drained:'작업 완료'}[phase]);
   set('batch',BATCH);
   set('total',`${jobs.length-finished}개 남음`);
-  const remaining=Math.max(0,Math.ceil((sim.backupAt+BACKUP_LIFETIME_MS-Date.now())/1000));
-  set('backup',sim.backupAt===null?'미전송':`${sim.backupRemaining}개 · ${remaining}초`);
+  const remaining=Math.max(0,Math.ceil((sim.backupAt+BACKUP_LIFETIME_MS-now)/1000));
+  set('backup',sim.backupAt===null?'미전송':`${sim.backupRemaining}개 · 잔여 공정 ${sim.backupStagesRemaining}건 · ${remaining}초`);
   const currentStep=phase==='recovering'?'step-reconcile':online?(sim.audit?'step-reconcile':'step-prepare'):'step-continue';
   for(const id of ['step-prepare','step-continue','step-reconcile']){
     $(id).setAttribute('aria-current',id===currentStep?'step':'false');
@@ -212,7 +219,7 @@ function paint(){
   set('check-latest',latest?`${latest.previous} → ${latest.robot} · ${latest.id} · ${latest.ok?'인계 기록 / 가상 스캔 일치':'불일치, 후속 작업 차단'}`:'상자 코드·수량·도크·선행 공정 완료를 대조합니다.');
   set('central-layer',`${phase==='recovering'?'연결 감지 · 복구 대조 대기':online?'연결됨 · 권한 자동 발급':'중앙 연결 끊김 · 기존 권한 유지'} · 구역 권한 ${[...sim.central.leases.values()].reduce((total,leases)=>total+leases.length,0)}건 · 에폭 ${sim.epoch}`);
   for(const [index,edge] of sim.edges.entries()){
-    const summary=`${edge.label} · ${edge.alive?'연결':'끊김'} · 점유 예약 ${edge.claims}회 / 로그 ${edge.log.size}건`;
+    const summary=`${edge.label} · ${edge.alive?'연결':'끊김'} · 활성 점유·예약 ${edge.reservations.size}칸 · 누적 ${edge.claims}회 / 로그 ${edge.log.size}건`;
     if(edgeRows[index].textContent!==summary)edgeRows[index].textContent=summary;
   }
   set('robot-layer',`이동·작업 ${moving}대 / 로컬 로그 ${sim.localTransfers.length}건`);
@@ -275,41 +282,79 @@ $('show-all-events').addEventListener('click',()=>showEventFilter(false));
 $('show-special-events').addEventListener('click',()=>showEventFilter(true));
 
 $('send-backup').addEventListener('click',()=>{
-  if(sim.sendBackup()){
+  if(sim.sendBackup(demoNow())){
     set('backup-result',`현장 작업표 전송 완료 · 상자 ${sim.backup.size}개 · 시연 유효시간 ${BACKUP_LIFETIME_MS/1000}초`);
     paint();
   }
 });
 $('daos-switch').addEventListener('click',()=>{sim.setDaos(!sim.daosEnabled);paint();});
-$('shared-edge').addEventListener('click',()=>{sim.setSharedEdge(!sim.edges[1].alive);paint();});
-$('connection').addEventListener('click',()=>{
-  if(sim.mode!=='offline'){
-    sim.disconnect();
-    set('backup-result','중앙 연결 끊김 · 작업표 자동 갱신 중단');
-  } else {
-    sim.restore();
+$('shared-edge').addEventListener('click',()=>{sim.setSharedEdge(!sim.edges[1].alive,demoNow());paint();});
+function applyConnection(){
+  const now=demoNow();
+  if(localOutage||centralOnline===false){
+    if(sim.mode!=='offline'){
+      sim.disconnect(now);
+      set('fault-status','DAOS 장애 운전 중 공정 기록이 생기면 사용할 수 있습니다.');
+      set('backup-result','중앙 연결 끊김 · 작업표 자동 갱신 중단');
+    }
+  }else if(sim.mode==='offline'){
+    sim.restore(now);
     set('backup-result','연결 감지 · 전환 시점 위치 저장');
   }
+}
+
+async function pollCentral(){
+  if(centralRequest)return;
+  centralRequest=true;
+  try{
+    const response=await fetch('/robot/central-status',{cache:'no-store',signal:AbortSignal.timeout(4500)});
+    if(!response.ok)throw Error('중앙 상태 확인 실패');
+    const {online}=await response.json();
+    if(typeof online!=='boolean')throw Error('잘못된 중앙 응답');
+    centralOnline=online;
+    centralReachable=true;
+    applyConnection();
+  }catch{
+    centralReachable=false;
+    // A failed request must not resume a server that last reported an outage.
+  }finally{
+    centralRequest=false;
+    centralChecked=true;
+    paint();
+  }
+}
+
+$('connection').addEventListener('click',()=>{
+  localOutage=!localOutage;
+  applyConnection();
   paint();
 });
+for(const kind of ['scan','replica']){
+  $(`fault-${kind}`).addEventListener('click',()=>{
+    const id=sim.injectRecoveryFault(kind,demoNow());
+    set('fault-status',id?`${id} 오류 재현 준비 완료 · 연결 복구 후 확인 보류를 확인하세요.`:'재현할 새 공정 기록을 기다려 주세요.');
+    paint();
+  });
+}
 $('pause').addEventListener('click',()=>{
   const wall=Date.now();
   paused=!paused;
-  if(paused){
-    timelinePausedAt=wall;
-  }else if(timelinePausedAt!==null){
-    timelinePauses.push([timelinePausedAt,wall]);
-    timelinePausedAt=null;
+  if(paused)pausedAt=wall;
+  else if(pausedAt!==null){
+    pausedDuration+=wall-pausedAt;
+    pausedAt=null;
   }
   sim.recordSpecial('notice',paused?'시연 일시정지':'시연 계속 실행',
-    paused?'사용자가 로봇과 설비의 시연을 일시정지했습니다.':'사용자가 시연을 다시 실행했습니다.',wall);
+    paused?'사용자가 로봇과 설비의 시연을 일시정지했습니다.':'사용자가 시연을 다시 실행했습니다.',demoNow(wall));
   paint();
 });
 $('reset').addEventListener('click',()=>{
   sim=new Warehouse(Date.now(),{compact:true});
   paused=prefersReducedMotion;
-  timelinePauses.length=0;
-  timelinePausedAt=paused?sim.startedAt:null;
+  pausedDuration=0;
+  pausedAt=paused?sim.startedAt:null;
+  localOutage=false;
+  applyConnection();
   set('backup-result','현장 작업표 자동 갱신 중');
   paint();
 });
@@ -319,7 +364,11 @@ canvas.addEventListener('click',event=>{
 });
 let previous=performance.now();
 function animate(now){
-  const wall=Date.now();
+  const wall=demoNow();
+  if(now-lastCentralPoll>=1500){
+    lastCentralPoll=now;
+    void pollCentral();
+  }
   const wasRecovering=sim.mode==='recovering';
   sim.updateConnection(wall);
   if(wasRecovering&&sim.mode==='online') set('backup-result','전환 시점 위치 반영 및 대조 완료 · 메인 시스템 재개');
@@ -328,7 +377,7 @@ function animate(now){
   if(!paused)sim.tick(Math.min((now-previous)/1000,.06),wall);
   previous=now;
   if(now-lastPaint>180){lastPaint=now;paint();}
-  scene.draw(sim,selected,paused&&!sim.daosEnabled&&sim.mode==='online');
+  scene.draw(sim,selected,paused&&!sim.daosEnabled&&sim.mode==='online',wall,paused);
   requestAnimationFrame(animate);
 }
 paint();

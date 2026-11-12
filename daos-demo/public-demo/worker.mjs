@@ -148,6 +148,23 @@ export default {
     if (path==='/robot'||path==='/robot.html') return Response.redirect(new URL('/robot/',url),302);
     if (path==='/robot/activate') return page('메인 관제센터의 접근 권한을 확인하고 있습니다.',
       '<a href="/robot/">관제실로 돌아가기</a>','<script type="module" src="/robot/activate.mjs"></script>');
+    if(path==='/robot/central-status'){
+      if(request.method!=='GET')return json({error:'허용되지 않는 요청입니다.'},405);
+      if(!portalSession&&!(key&&email&&await verify(key,'session',email,readCookie(request))))
+        return json({error:'관제실 접속 권한이 필요합니다.'},403);
+      const headers={'X-DAOS-Robot-Key':env.DAOS_ROBOT_KEY};
+      if(env.DAOS_CENTRAL_ACCESS)headers['OAI-Sites-Authorization']=`Bearer ${env.DAOS_CENTRAL_ACCESS}`;
+      try{
+        const response=await fetch(central+'/api/central/warehouse',{
+          headers,redirect:'manual',signal:AbortSignal.timeout(3500),
+        });
+        if(response.ok){
+          const {online}=await response.json();
+          if(typeof online==='boolean')return json({online},200);
+        }
+      }catch{}
+      return json({error:'메인 관제센터 상태를 확인하지 못했습니다.'},503);
+    }
     if (path.startsWith('/robot/') && !['/robot/','/robot/index.html','/robot/session'].includes(path)) return asset(path,request);
     if (!path.startsWith('/robot/')) return asset(path==='/'?'/index.html':path,request);
 

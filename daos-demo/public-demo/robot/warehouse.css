@@ -185,3 +185,9 @@ button,select{font:inherit;font-size:13px;min-height:40px;border-radius:8px;padd
 .position-table-scroll [data-result]{white-space:nowrap;font-weight:750}
 .position-table-scroll [data-result=held]{color:#a22036;background:#fff1f2}
 .position-table-scroll [data-result=matched]{color:#17654b}
+.run-details .outage-track,.run-details .metrics,.run-details .map-result,.run-kpis{margin-top:9px}
+.run-details .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+.run-kpis h3{font-size:13px;margin:0}
+.run-kpis>p{font-size:12px;margin:6px 0 0}
+.operations-details>.map-key{border-top:0}
+.operations-details>.handoff-panel{margin-bottom:10px}

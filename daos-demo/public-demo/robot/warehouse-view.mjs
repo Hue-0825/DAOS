@@ -352,21 +352,24 @@ function paint(){
   }
 }
 
-function showEventFilter(special){
-  $('all-event-panel').hidden=special;
-  $('special-event-panel').hidden=!special;
-  $('show-all-events').setAttribute('aria-pressed',String(!special));
-  $('show-special-events').setAttribute('aria-pressed',String(special));
-}
-$('show-all-events').addEventListener('click',()=>showEventFilter(false));
-$('show-special-events').addEventListener('click',()=>showEventFilter(true));
-
-$('show-position-comparison').addEventListener('click',()=>{
-  const panel=$('position-comparison'),button=$('show-position-comparison');
-  panel.hidden=!panel.hidden;
-  button.setAttribute('aria-expanded',String(!panel.hidden));
+const eventViews={
+  'show-all-events':'all-event-panel',
+  'show-special-events':'special-event-panel',
+  'show-position-comparison':'position-comparison',
+};
+function showEventView(activeButton){
+  for(const [button,panel] of Object.entries(eventViews)){
+    const active=button===activeButton;
+    $(panel).hidden=!active;
+    $(button).setAttribute('aria-pressed',String(active));
+  }
+  $('event-expand').hidden=activeButton==='show-position-comparison';
   paintPositionComparison();
-});
+}
+for(const button of Object.keys(eventViews)){
+  $(button).addEventListener('click',()=>showEventView(button));
+}
+
 $('expand-events').addEventListener('click',()=>{
   const button=$('expand-events');
   const expanded=button.closest('.operations-overview').classList.toggle('events-expanded');

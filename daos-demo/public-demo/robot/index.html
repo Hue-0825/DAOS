@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
   <title>DAOS 물류 로봇 및 현장 시뮬레이터</title>
-  <link rel="stylesheet" href="warehouse.css?v=25">
-  <script type="module" src="warehouse-view.mjs?v=33"></script>
+  <link rel="stylesheet" href="warehouse.css?v=26">
+  <script type="module" src="warehouse-view.mjs?v=34"></script>
 </head>
 <body class="robot-lab">
   <header class="topbar"><a class="wordmark" href="https://daos-logistics.ryker6365.chatgpt.site/"><b>DAOS</b><span> / 물류 현장 시뮬레이터</span></a><div class="top-actions"><a href="/project.html">시스템 설명 ↗</a><span id="mode" class="server-state" role="status">시연 서버 연결됨</span></div></header>
@@ -48,7 +48,7 @@
           <div class="event-filters" role="group" aria-label="이벤트 보기">
             <button id="show-all-events" type="button" aria-controls="all-event-panel" aria-pressed="true">전체 이벤트</button>
             <button id="show-special-events" type="button" aria-controls="special-event-panel" aria-pressed="false">특수 이벤트</button>
-            <button id="show-position-comparison" type="button" aria-expanded="false" aria-controls="position-comparison">3중 대조 위치표</button>
+            <button id="show-position-comparison" type="button" aria-pressed="false" aria-controls="position-comparison">3중 대조 위치표</button>
           </div>
         </div>
         <div id="all-event-panel">
@@ -58,7 +58,7 @@
           <p id="special-empty">서버 연결이나 운전 상태가 바뀌면 이곳에 기록됩니다.</p>
           <ol id="special-events" aria-label="주요 운영 이벤트"></ol>
         </div>
-        <div class="event-expand"><button id="expand-events" type="button" aria-expanded="false" aria-controls="all-event-panel special-event-panel">이벤트 펼치기</button></div>
+        <div class="event-expand" id="event-expand"><button id="expand-events" type="button" aria-expanded="false" aria-controls="all-event-panel special-event-panel">이벤트 펼치기</button></div>
         <section id="position-comparison" class="position-comparison" aria-labelledby="position-comparison-title" hidden>
           <h3 id="position-comparison-title">복구 시점 상자 위치 대조</h3>
           <p id="position-comparison-note">서버를 끊었다가 복구하면 상자별 위치와 대조 결과가 표시됩니다.</p>

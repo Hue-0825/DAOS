@@ -1,0 +1,28 @@
+import assert from 'node:assert/strict';
+import {Warehouse} from '../robot/warehouse-engine.mjs';
+const snap=s=>JSON.stringify({robots:s.robots,jobs:[...s.jobs],pending:s.pending});
+const s=new Warehouse(0);
+for(let i=1;i<=30;i++)s.tick(.05,i*50);
+s.disconnect(1500);
+const stopped=snap(s);
+s.tick(.05,2499);assert.equal(snap(s),stopped);assert.equal(s.offlinePhase(2499),'handover');
+s.tick(.05,2500);assert.equal(s.offlinePhase(2500),'backup');
+for(let i=1;i<=200;i++)s.tick(.05,2500+i*50);
+assert.ok(s.pending>0);
+s.restore(12500);const epoch=s.epoch, pending=s.pending, freeze=snap(s);
+s.restore(13000); // duplicate detection must not restart the timer
+s.tick(.05,13499);assert.equal(snap(s),freeze);assert.equal(s.offlinePhase(13499),'recovering');assert.equal(s.epoch,epoch);assert.equal(s.pending,pending);
+assert.equal(s.positionPacket.capturedAt,12500);
+const packet=s.positionPacket, centralLocations=new Map(s.centralLocations);
+assert.ok(packet.changed.length>0);
+s.updateConnection(13500);assert.equal(s.recoveryPhase,'positions');assert.equal(packet.received,false);
+s.tick(.05,14499);assert.equal(snap(s),freeze);
+s.updateConnection(14500);assert.equal(s.recoveryPhase,'reconcile');assert.equal(packet.received,true);
+assert.deepEqual(s.centralLocations,centralLocations);
+s.tick(.05,15499);assert.equal(snap(s),freeze);
+s.updateConnection(15500);assert.equal(s.mode,'online');
+for(const [id,position] of packet.changed)assert.deepEqual(s.centralLocations.get(id),position);
+assert.equal(s.epoch,epoch+1);assert.equal(s.pending,0);assert.ok(s.synced>0);assert.equal(s.audit.held,0);
+const t=new Warehouse(0);t.disconnect(100);t.tick(.05,1100);t.restore(1200);const baseline=t.centralStages;t.disconnect(1300);assert.equal(t.centralStages,baseline);t.updateConnection(3000);assert.equal(t.mode,'offline');assert.equal(t.epoch,1);t.restore(3000);t.updateConnection(3999);assert.equal(t.mode,'recovering');t.updateConnection(4000);t.updateConnection(5000);t.updateConnection(6000);assert.equal(t.mode,'online');assert.equal(t.epoch,2);
+const u=new Warehouse(0);u.setDaos(false);u.disconnect(100);u.restore(200);const frozen=snap(u);u.tick(.05,1199);assert.equal(snap(u),frozen);u.updateConnection(1200);u.updateConnection(2200);u.updateConnection(3200);assert.equal(u.mode,'online');
+console.log('PASS: both 1-second stops, offline progress, deferred reconciliation, repeated recovery, interrupted recovery and DAOS OFF.');

@@ -1,23 +1,34 @@
-import {BATCH,STAGES,Warehouse,BACKUP_LIFETIME_MS} from './warehouse-engine.mjs?v=6';
-import {createScene} from './warehouse-scene.mjs?v=6';
+import {BATCH,STAGES,Warehouse,BACKUP_LIFETIME_MS} from './warehouse-engine.mjs?v=21';
+import {createScene} from './warehouse-scene.mjs?v=24';
 
 const $=id=>document.getElementById(id);
 const canvas=$('warehouse');
 const scene=createScene(canvas);
-let sim=new Warehouse();
+let sim=new Warehouse(Date.now(),{compact:true});
 let selected='UL-01';
 const prefersReducedMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
 let paused=prefersReducedMotion;
 let lastPaint=0;
 let visibleEvent;
 const INCIDENTS={
-  online:['✓','서버 연결 · 공동 작업 중','20대가 같은 출고 배치의 작업표를 공유합니다. 공정을 마친 상자는 다음 로봇에게 인계합니다.'],
+  recovering:['Ⅱ','서버 복구 감지 · 1초 안전 정지','로봇을 멈춘 뒤 서버·현장 기록을 대조합니다. 확인된 작업부터 메인 시스템 운전을 재개합니다.'],
+  online:['✓','서버 연결 · 공동 작업 중','로봇 18대와 컨베이어 6대가 같은 작업표를 공유합니다. 공정을 마친 상자는 다음 로봇에게 인계합니다.'],
   handover:['!','서버 장애 감지 · 1초 전환 중','현재 위치에서 잠시 대기하며 받은 작업표와 구역 점유권을 확인합니다.'],
-  backup:['↻','DAOS 자율운전 · 로봇 간 인계 재개','받아 둔 작업표로 이어서 처리합니다. 지도에는 각 로봇이 수행 중인 공정과 대기 상태를 표시합니다.'],
+  backup:['DAOS','DAOS 가동 중 · 백업 데이터로 작업 계속','서버가 끊기기 전에 저장한 작업표와 구역 점유권으로 상자 운반과 인계를 이어갑니다.'],
   stopped:['■','안전 정지 · DAOS 꺼짐','현재 위치에서 대기합니다. 서버를 복구하거나 DAOS를 켜면 조건에 따라 작업을 이어갑니다.'],
   waiting:['…','백업 작업표 미수신','서버를 복구한 뒤 오른쪽 위에서 백업 작업표를 전송해 주세요.'],
   expired:['■','백업 작업표 만료 · 안전 정지','예약한 이동 칸까지만 도달한 뒤 대기합니다. 연결 복구 후 기록을 대조합니다.'],
   drained:['✓','현장 작업표 처리 완료','저장한 물량의 상차를 마쳤습니다. 다음 작업표를 받으려면 연결을 복구해 주세요.'],
+};
+const WORK_SOURCES={
+  recovering:'서버 연결 감지 · 메인 전환 대기',
+  online:'중앙 서버 작업표 사용 중',
+  handover:'서버 끊김 · 백업 확인 중',
+  backup:'DAOS 가동 · 백업 데이터 사용 중',
+  stopped:'DAOS 꺼짐 · 안전 정지',
+  waiting:'백업 데이터 대기 중',
+  expired:'백업 데이터 만료',
+  drained:'백업 작업 완료',
 };
 function set(id,text){if($(id).textContent!==text)$(id).textContent=text;}
 const fleetRows=sim.robots.map(robot=>{
@@ -50,43 +61,169 @@ const stages=STAGES.map(role=>{
   return count;
 });
 
+const modes={online:'정상 운전',outage:'장애·대기',backup:'DAOS 운전',recovering:'복구 전환'};
+const modeColors={online:'var(--timeline-online)',outage:'var(--timeline-outage)',backup:'var(--timeline-backup)',recovering:'var(--timeline-recovering)'};
+const TIMELINE_REFERENCE_MS=60_000;
+const EMPTY_ARC_COLOR='#e6e3ef';
+let timelineFinishedAt=null;
+let timelinePausedAt=paused?sim.startedAt:null;
+const timelinePauses=[];
+let timelineSession=null;
+let timelineSize=-1;
+
+function elapsedLabel(ms,precise=false){
+  const seconds=Math.max(0,Math.floor(ms/1000));
+  const stamp=[Math.floor(seconds/60),seconds%60].map(value=>String(value).padStart(2,'0')).join(':');
+  return precise?`${stamp}.${Math.floor(Math.max(0,ms)%1000/100)}`:stamp;
+}
+
+function timelineElapsedAt(wall){
+  const pausedDuration=timelinePauses.reduce((duration,[start,end])=>
+    duration+Math.max(0,Math.min(end,wall)-start),0);
+  const currentPause=timelinePausedAt===null?0:Math.max(0,wall-timelinePausedAt);
+  return Math.max(0,wall-sim.startedAt-pausedDuration-currentPause);
+}
+
+function paintOverview(finished,total){
+  if(timelineSession!==sim)timelineFinishedAt=null;
+  const wall=Date.now();
+  if(finished===total&&timelineFinishedAt===null)timelineFinishedAt=wall;
+  const now=timelineFinishedAt??wall;
+  const elapsed=timelineElapsedAt(now);
+  const fill=timelineFinishedAt!==null?100:Math.min(98,elapsed/TIMELINE_REFERENCE_MS*100);
+  const mode=sim.operatingMode;
+  const overview=$('overview-mode');
+  overview.dataset.mode=mode;
+  set('overview-mode',paused?'일시정지':modes[mode]);
+  set('shipment-percent',`${Math.floor(finished/total*100)}%`);
+  $('shipment-progress').max=total;
+  $('shipment-progress').value=finished;
+  set('shipment-count',`${finished} / ${total}개 상차 완료`);
+  set('run-elapsed',elapsedLabel(elapsed));
+  const timeline=$('mode-timeline');
+  const transitions=[{now:sim.startedAt,mode:'online'},...sim.specialEvents.filter(event=>event.mode&&event.now<=now)];
+  if(timelineSession!==sim||timelineSize!==sim.specialEvents.length){
+    timelineSession=sim;
+    timelineSize=sim.specialEvents.length;
+    $('special-empty').hidden=timelineSize>0;
+    $('special-events').replaceChildren(...sim.specialEvents.slice().reverse().map(event=>{
+      const row=document.createElement('li');
+      row.dataset.kind=event.kind;
+      const time=document.createElement('time');
+      time.dateTime=new Date(event.now).toISOString();
+      time.textContent=`+${elapsedLabel(timelineElapsedAt(event.now),true)}`;
+      time.title=new Date(event.now).toLocaleTimeString('ko-KR',{hour12:false});
+      const body=document.createElement('div'), title=document.createElement('strong'), detail=document.createElement('p');
+      title.textContent=event.title;
+      detail.textContent=event.detail;
+      body.append(title,detail);
+      row.append(time,body);
+      return row;
+    }));
+  }
+  const stops=[], descriptions=[];
+  transitions.forEach((event,index)=>{
+    const end=transitions[index+1]?.now??now;
+    const startElapsed=timelineElapsedAt(event.now);
+    const endElapsed=timelineElapsedAt(end);
+    if(endElapsed<=startElapsed)return;
+    const startAngle=startElapsed/Math.max(elapsed,1)*fill;
+    const endAngle=endElapsed/Math.max(elapsed,1)*fill;
+    stops.push(`${modeColors[event.mode]} ${startAngle}% ${endAngle}%`);
+    descriptions.push(`${modes[event.mode]} ${elapsedLabel(timelineElapsedAt(event.now),true)} ~ ${elapsedLabel(endElapsed,true)}`);
+  });
+  if(fill<100)stops.push(`${EMPTY_ARC_COLOR} ${fill}% 100%`);
+  timeline.style.background=`conic-gradient(${stops.join(', ')})`;
+  const summary=[timelineFinishedAt===null?'시연 진행 중':'전체 상차 완료',...descriptions].join(', ');
+  timeline.setAttribute('aria-label',summary);
+  timeline.title=summary;
+}
+
 function paint(){
   const online=sim.mode==='online',phase=sim.offlinePhase()??'online';
   const alarm=sim.alarmActive();
-  const [icon,title,detail]=INCIDENTS[phase];
+  const manualStop=online&&paused&&!sim.daosEnabled;
+  const warningStop=phase==='stopped'||manualStop;
+  const recoveryStatus={
+    stop:['Ⅱ','전환 시점 위치 확보','로봇과 컨베이어를 멈추고 현재 상자 위치를 저장했습니다. 1초 정지 후 중앙으로 전송합니다.'],
+    positions:['↑','전환 시점 위치 전송 중',`상자 ${sim.positionPacket?.positions.size??0}개의 위치를 메인 서버로 보내고 있습니다.`],
+    reconcile:['✓','메인 서버 위치 수신 완료',`위치가 달라진 상자 ${sim.positionPacket?.changed.length??0}개를 확인했습니다. 작업 이력을 대조한 뒤 재개합니다.`],
+  };
+  const [icon,title,detail]=manualStop
+    ?['Ⅱ','일시정지 · DAOS 꺼짐','로봇과 컨베이어가 멈췄습니다. 계속 실행을 누르면 시연을 재개합니다.']
+    :phase==='recovering'?recoveryStatus[sim.recoveryPhase]:INCIDENTS[phase];
   const jobs=[...sim.jobs.values()],finished=jobs.filter(job=>job.stage===STAGES.length).length;
+  paintOverview(finished,jobs.length);
   const connection=$('connection');
   $('mode').dataset.mode=sim.mode;
-  $('incident').dataset.phase=alarm?'alert':phase;
+  $('incident').dataset.phase=warningStop?'stopped':alarm?'alert':phase;
+  $('work-source').dataset.phase=warningStop?'stopped':phase;
+  $('stop-warning').hidden=!warningStop;
+  set('work-source',manualStop?'DAOS 꺼짐 · 일시정지':phase==='recovering'?title:WORK_SOURCES[phase]);
   $('send-backup').disabled=!online;
-  $('audit-result').hidden=!sim.audit;
-  if(sim.audit)set('audit-result',`복구 3중 대조 · 일치 ${sim.audit.verified}개 / 확인 보류 ${sim.audit.held}개 · 엣지 복제 ${sim.audit.replicated}건 · 운전 세대 ${sim.epoch}`);
+  const packet=sim.positionPacket;
+  $('position-transfer').hidden=!packet?.received;
+  if(packet?.received&&$('position-transfer').open){
+    const samples=(packet.changed.length?packet.changed:[...packet.positions]).slice(0,5);
+    const kinds={station:'작업대',conveyor:'컨베이어',robot:'운반 중',arm:'로봇팔 공정',shipped:'상차 완료'};
+    set('position-transfer-sample',samples.map(([id,position])=>
+      [id,kinds[position.kind],position.holder,position.coordinates?.join(', ')].filter(Boolean).join(' · ')).join('\n'));
+  }
+  $('audit-result').hidden=!online||!sim.audit;
+  if(online&&sim.audit)set('audit-result',`전환 위치 ${sim.audit.received}개 수신 · ${sim.audit.changed}개 변경 · 3중 대조 일치 ${sim.audit.verified}개 / 확인 보류 ${sim.audit.held}개 · 엣지 복제 ${sim.audit.replicated}건 · 운전 세대 ${sim.epoch}`);
   $('daos-switch').setAttribute('aria-checked',String(sim.daosEnabled));
-  connection.dataset.recover=String(!online);
+  connection.dataset.recover=String(sim.mode==='offline');
   set('daos-value',sim.daosEnabled?'ON':'OFF');
   set('pause',paused?'계속 실행':'일시정지');
-  set('connection',online?'시연 서버 연결 끊기':'시연 서버 연결 복구');
-  set('mode',online?'시연 서버 연결됨':'시연 서버 연결 끊김');
+  set('connection',sim.mode!=='offline'?'시연 서버 연결 끊기':'시연 서버 연결 복구');
+  set('mode',sim.mode==='recovering'?'서버 연결됨 · 안전 전환 중':online?'시연 서버 연결됨':'시연 서버 연결 끊김');
   set('incident-icon',icon);
   set('incident-title',title);
   set('incident-detail',detail);
-  set('drive-mode',{online:'정상 운전',handover:'운전 전환',backup:'현장 자율운전',stopped:'안전 정지',waiting:'백업 대기',expired:'유효기간 만료',drained:'작업 완료'}[phase]);
+  set('drive-mode',manualStop?'일시정지':{recovering:'메인 전환 · 안전 정지',online:'정상 운전',handover:'운전 전환',backup:'DAOS 백업 운전',stopped:'안전 정지',waiting:'백업 대기',expired:'유효기간 만료',drained:'작업 완료'}[phase]);
   set('batch',BATCH);
   set('total',`${jobs.length-finished}개 남음`);
   const remaining=Math.max(0,Math.ceil((sim.backupAt+BACKUP_LIFETIME_MS-Date.now())/1000));
   set('backup',sim.backupAt===null?'미전송':`${sim.backupRemaining}개 · ${remaining}초`);
+  const currentStep=phase==='recovering'?'step-reconcile':online?(sim.audit?'step-reconcile':'step-prepare'):'step-continue';
+  for(const id of ['step-prepare','step-continue','step-reconcile']){
+    $(id).setAttribute('aria-current',id===currentStep?'step':'false');
+  }
+  set('track-prepare',sim.backupAt===null?'작업표 미전송':`저장된 작업표 · 상자 ${sim.backup.size}개`);
+  const outageSummary={
+    handover:'전환 중 · 작업표 확인',
+    backup:`백업 사용 중 · 공정 완료 ${sim.localTransfers.length}건`,
+    stopped:'DAOS 꺼짐 · 안전 정지',
+    waiting:'백업 작업표 대기',
+    expired:'작업표 만료 · 안전 정지',
+    drained:`백업 작업 완료 · 공정 ${sim.localTransfers.length}건`,
+  };
+  set('track-continue',outageSummary[phase]??(sim.audit?`장애 중 공정 기록 ${sim.audit.replicated}건`:'연결 끊기 대기'));
+  set('track-reconcile',phase==='recovering'?title:online&&sim.audit?`위치 ${sim.audit.received}개 수신 · ${sim.audit.changed}개 변경 · ${sim.audit.held}개 보류`:'연결 복구 대기');
   set('completed',`${finished} / ${jobs.length}개`);
   set('pending',online?`복구 합산 ${sim.synced}건`:`복구 대기 ${sim.pending}건`);
   const moving=!paused&&(online||phase==='backup')?sim.robots.filter(robot=>robot.next||robot.job).length:0;
   set('active',`이동 및 작업 ${moving} / ${sim.robots.length}대`);
-  set('central-layer',`${online?'연결됨 · 권한 자동 발급':'중앙 연결 끊김 · 기존 권한 유지'} · 로봇 권한 ${sim.central.leases.size}건 · 세대 ${sim.epoch}`);
+  const running=!paused&&(online||phase==='backup');
+  set('facility-mode',running?(phase==='backup'?'DAOS · 컨베이어 백업 운전':'중앙 · 컨베이어 운전'):'컨베이어 · 정지');
+  set('belt-count',`이송 중 ${jobs.filter(job=>job.belt).length}개 / 벨트 6대`);
+  set('check-count',`검증 통과 ${sim.checkTotals.passed}건 · 보류 ${jobs.filter(job=>job.auditHold).length}개`);
+  const latest=sim.checks[0];
+  set('check-latest',latest?`${latest.previous} → ${latest.robot} · ${latest.id} · ${latest.ok?'인계 기록 / 가상 스캔 일치':'불일치, 후속 작업 차단'}`:'상자 코드·수량·도크·선행 공정 완료를 대조합니다.');
+  set('central-layer',`${phase==='recovering'?'연결 감지 · 복구 대조 대기':online?'연결됨 · 권한 자동 발급':'중앙 연결 끊김 · 기존 권한 유지'} · 구역 권한 ${[...sim.central.leases.values()].reduce((total,leases)=>total+leases.length,0)}건 · 에폭 ${sim.epoch}`);
   for(const [index,edge] of sim.edges.entries()){
-    const summary=`${edge.label} · 점유 예약 ${edge.claims}회 / 로그 ${edge.log.size}건`;
+    const summary=`${edge.label} · ${edge.alive?'연결':'끊김'} · 점유 예약 ${edge.claims}회 / 로그 ${edge.log.size}건`;
     if(edgeRows[index].textContent!==summary)edgeRows[index].textContent=summary;
   }
   set('robot-layer',`이동·작업 ${moving}대 / 로컬 로그 ${sim.localTransfers.length}건`);
-  const handoffs=[...sim.buffers()].reduce((total,buffer)=>total+buffer.count,0);
-  set('notice',`출고 배치 ${BATCH} · 공정 간 인계 대기 ${handoffs}개 · 지도에서 로봇을 누르면 맡은 상자를 확인할 수 있습니다.`);
+  const sharedEdge=sim.edges[1];
+  $('shared-edge').setAttribute('aria-pressed',String(!sharedEdge.alive));
+  set('shared-edge',sharedEdge.alive?'공유 통로 엣지 끊기':'공유 통로 엣지 복구');
+  const decisions={GREEN:0,YELLOW:0,RED:0};
+  if(phase==='backup'){
+    for(const robot of sim.robots)if(robot.drg)decisions[robot.drg]++;
+  }
+  set('drg-status',phase==='backup'?`최근 판단 · 초록 ${decisions.GREEN} / 노랑 ${decisions.YELLOW} / 빨강 ${decisions.RED}`:'DRG 판단은 백업 운전 중 표시됩니다.');
   stages.forEach((node,index)=>{
     const total=jobs.filter(job=>job.stage===index).length;
     const busy=sim.robots.filter(robot=>robot.stage===index&&robot.job).length;
@@ -94,14 +231,27 @@ function paint(){
     if(node.textContent!==label)node.textContent=label;
   });
   sim.robots.forEach((robot,index)=>{
-    const button=fleetRows[index],label=sim.robotStatus(robot,phase);
+    const button=fleetRows[index];
+    const label=sim.robotStatus(robot,phase);
     button.setAttribute('aria-pressed',String(selected===robot.id));
     if(button.children[2].textContent!==label)button.children[2].textContent=label;
   });
   const robot=sim.robots.find(item=>item.id===selected),role=STAGES[robot.stage];
+  const status=sim.robotStatus(robot,phase);
+  set('map-robot',`${robot.id} · ${role.design}`);
+  set('map-robot-status',status);
   set('robot-name',`${robot.id} · ${role.design}`);
+  const inspector=$('robot-records');
+  if(inspector.parentElement.open){
+    const leases=(sim.central.leases.get(robot.id)??[]).map(lease=>({
+      ...lease,taskIds:[...lease.taskIds].slice(0,3),taskCount:lease.taskIds.size,
+      from:new Date(lease.from).toISOString(),until:new Date(lease.until).toISOString(),
+    }));
+    set('robot-records',JSON.stringify({leases,latestEvent:robot.localLog.at(-1)??null},null,2));
+  }
   set('robot-rule',role.rule);
-  set('robot-note',`${sim.robotStatus(robot,phase)} · 공정 완료 ${robot.done}개`);
+  set('robot-note',`${status} · 공정 완료 ${robot.done}개`);
+  set('robot-check',robot.lastCheck?`${robot.lastCheck.previous}의 기록과 가상 스캔 ${robot.lastCheck.ok?'일치 · 후속 작업 허용':'불일치 · 작업자 확인 필요'}`:'상자 인수 시 선행 공정 결과를 검증합니다.');
   set('robot-task',robot.job?`상자 ${robot.job.id} · 출고 도크 ${robot.job.segment+1}`:'다음 상자 인계 대기');
   if(visibleEvent!==sim.events[0]){
     visibleEvent=sim.events[0];
@@ -115,6 +265,15 @@ function paint(){
   }
 }
 
+function showEventFilter(special){
+  $('all-event-panel').hidden=special;
+  $('special-event-panel').hidden=!special;
+  $('show-all-events').setAttribute('aria-pressed',String(!special));
+  $('show-special-events').setAttribute('aria-pressed',String(special));
+}
+$('show-all-events').addEventListener('click',()=>showEventFilter(false));
+$('show-special-events').addEventListener('click',()=>showEventFilter(true));
+
 $('send-backup').addEventListener('click',()=>{
   if(sim.sendBackup()){
     set('backup-result',`현장 작업표 전송 완료 · 상자 ${sim.backup.size}개 · 시연 유효시간 ${BACKUP_LIFETIME_MS/1000}초`);
@@ -122,15 +281,35 @@ $('send-backup').addEventListener('click',()=>{
   }
 });
 $('daos-switch').addEventListener('click',()=>{sim.setDaos(!sim.daosEnabled);paint();});
+$('shared-edge').addEventListener('click',()=>{sim.setSharedEdge(!sim.edges[1].alive);paint();});
 $('connection').addEventListener('click',()=>{
-  if(sim.mode==='online')sim.disconnect();
-  else {sim.restore();set('backup-result','연결 복구 · 현장 작업표 자동 갱신 중');}
+  if(sim.mode!=='offline'){
+    sim.disconnect();
+    set('backup-result','중앙 연결 끊김 · 작업표 자동 갱신 중단');
+  } else {
+    sim.restore();
+    set('backup-result','연결 감지 · 전환 시점 위치 저장');
+  }
   paint();
 });
-$('pause').addEventListener('click',()=>{paused=!paused;paint();});
+$('pause').addEventListener('click',()=>{
+  const wall=Date.now();
+  paused=!paused;
+  if(paused){
+    timelinePausedAt=wall;
+  }else if(timelinePausedAt!==null){
+    timelinePauses.push([timelinePausedAt,wall]);
+    timelinePausedAt=null;
+  }
+  sim.recordSpecial('notice',paused?'시연 일시정지':'시연 계속 실행',
+    paused?'사용자가 로봇과 설비의 시연을 일시정지했습니다.':'사용자가 시연을 다시 실행했습니다.',wall);
+  paint();
+});
 $('reset').addEventListener('click',()=>{
-  sim=new Warehouse();
+  sim=new Warehouse(Date.now(),{compact:true});
   paused=prefersReducedMotion;
+  timelinePauses.length=0;
+  timelinePausedAt=paused?sim.startedAt:null;
   set('backup-result','현장 작업표 자동 갱신 중');
   paint();
 });
@@ -141,12 +320,15 @@ canvas.addEventListener('click',event=>{
 let previous=performance.now();
 function animate(now){
   const wall=Date.now();
+  const wasRecovering=sim.mode==='recovering';
+  sim.updateConnection(wall);
+  if(wasRecovering&&sim.mode==='online') set('backup-result','전환 시점 위치 반영 및 대조 완료 · 메인 시스템 재개');
   sim.maintainBackup(wall);
   sim.updateOutage(wall);
   if(!paused)sim.tick(Math.min((now-previous)/1000,.06),wall);
   previous=now;
   if(now-lastPaint>180){lastPaint=now;paint();}
-  scene.draw(sim,selected);
+  scene.draw(sim,selected,paused&&!sim.daosEnabled&&sim.mode==='online');
   requestAnimationFrame(animate);
 }
 paint();

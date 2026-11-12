@@ -1,20 +1,25 @@
-import {CentralPlan,ZoneEdge,ZONES,zoneOf} from './warehouse-layers.mjs?v=6';
+import {CentralPlan,ZoneEdge,ZONES,zoneOf,covers,HybridClock,sameEvent} from './warehouse-layers.mjs?v=8';
 
 export const SIZE = [32, 23];
-export const RACKS = [5,10,15].flatMap(y => [9,14,19].map(x => [x,y,3,2]));
+export const RACKS = [1,7,14,20].flatMap(y => [10,14].map(x => [x,y,2,1]));
+export const inFloor=([x,y])=>x>=0&&x<32&&y>=0&&y<23&&!(x<4&&y>19)&&!(x>28&&y>21);
+export const BELTS = [4,11,18].flatMap((y,segment)=>[{id:`CV-IN-${segment+1}`,segment,from:[18,y],to:[22,y],stage:1},{id:`CV-OUT-${segment+1}`,segment,from:[23,y],to:[27,y],stage:2}]);
 export const STAGES = [
-  {label:'하차', code:'UL', design:'포크형 하차 로봇', count:4, color:'#71e4fa', stations:[[2,4],[2,11],[2,18]], rule:'하차한 상자를 입고 버퍼에 내려놓습니다. 버퍼가 차면 운반 로봇이 가져갈 때까지 기다립니다.'},
-  {label:'운반', code:'AM', design:'평판형 운반 로봇', count:5, color:'#a4aaff', stations:[[6,4],[6,11],[6,18]], rule:'버퍼의 상자를 공유 통로로 운반합니다. 다른 로봇이 점유한 칸에는 진입하지 않습니다.'},
-  {label:'분류', code:'ST', design:'스캔 게이트형 분류 로봇', count:4, color:'#dca7fc', stations:[[23,4],[23,11],[23,18]], rule:'운반 로봇이 넘긴 상자를 출고 도크별로 분류합니다.'},
-  {label:'출차 배정', code:'DP', design:'단말형 배정 로봇', count:3, color:'#ffd089', stations:[[27,3],[27,10],[27,17]], rule:'분류가 끝난 상자에 지정된 출고 도크를 확인하고 상차팀에 넘깁니다.'},
-  {label:'상차', code:'LD', design:'리프트형 상차 로봇', count:4, color:'#96ebbb', stations:[[30,5],[30,12],[30,19]], rule:'출고 확인을 마친 상자만 분류 버퍼에서 받아 트럭에 싣습니다.'},
+  {label:'하차', code:'UL', design:'포크형 하차 로봇', count:3, color:'#71e4fa', stations:[[2,4],[2,11],[2,18]], rule:'하차한 상자를 입고 버퍼에 내려놓습니다. 버퍼가 차면 운반 로봇이 가져갈 때까지 기다립니다.'},
+  {label:'운반', code:'AM', design:'평판형 운반 로봇', count:6, color:'#a4aaff', stations:[[6,4],[6,11],[6,18]], rule:'버퍼의 상자를 공유 통로로 운반합니다. 다른 로봇이 점유한 칸에는 진입하지 않습니다.'},
+  {label:'분류', fixed:true, code:'ST', design:'비전 분류 로봇 팔', count:3, color:'#dca7fc', stations:[[22,4],[22,11],[22,18]], rule:'운반 로봇이 넘긴 상자를 출고 도크별로 분류합니다.'},
+  {label:'적재', fixed:true, code:'DP', design:'팔레타이징 로봇 팔', count:3, color:'#ffd089', stations:[[27,4],[27,11],[27,18]], rule:'컨베이어에서 받은 상자의 분류 결과와 도크를 재검증하고, 진공 그리퍼로 팔레트에 적재합니다.'},
+  {label:'상차', code:'LD', design:'리프트형 상차 로봇', count:3, color:'#96ebbb', stations:[[30,5],[30,12],[30,19]], rule:'출고 확인을 마친 상자만 분류 버퍼에서 받아 트럭에 싣습니다.'},
 ];
 const key = ([x,y]) => y * SIZE[0] + x;
-const nextCells = ([x,y]) => [[x+1,y],[x,y+1],[x-1,y],[x,y-1]].filter(([a,b]) => a>=0 && a<SIZE[0] && b>=0 && b<SIZE[1]);
+const nextCells = ([x,y]) => [[x+1,y],[x,y+1],[x-1,y],[x,y-1]].filter(inFloor);
 const walls = new Set(RACKS.flatMap(([x,y,w,h]) => Array.from({length:w*h}, (_,i)=>key([x+i%w,y+Math.floor(i/w)]))));
+// Physical buffer pallets and chargers are obstacles, not decorative drive-through areas.
+for(const y of [4,11,18])for(const x of [3,4])for(const dy of [1,2])walls.add(key([x,y+dy]));
+for(const x of [5,6,7,8])walls.add(key([x,21]));
 export const PARKING = [
-  [[1,2],[1,7],[1,14],[1,20]], [[5,2],[5,8],[5,15],[5,20],[8,20]],
-  [[24,1],[24,7],[24,14],[24,21]], [[26,1],[26,8],[26,15]], [[29,1],[29,8],[29,15],[29,21]],
+  [[1,2],[1,9],[1,16]], [[6,2],[6,9],[6,16],[8,2],[8,9],[8,16]],
+  [[22,4],[22,11],[22,18]], [[27,4],[27,11],[27,18]], [[30,2],[30,9],[30,16]],
 ];
 export const BATCH = 'A-01';
 
@@ -38,12 +43,14 @@ function pathTo(start, end, blocked, allowed) {
   return [];
 }
 
+export const ARM_CYCLE_SECONDS = 2.4;
 export const OUTAGE_ALERT_MS = 1000;
+export const RECOVERY_STEP_MS = 1000;
 export const BACKUP_LIFETIME_MS = 45000;
 const BACKUP_REFRESH_MS = 10000;
 
 export class Warehouse {
-  constructor(now=Date.now()) {
+  constructor(now=Date.now(), {compact=false}={}) {
     this.jobs = new Map();
     this.backup = new Set();
     this.backupAt = null;
@@ -51,24 +58,42 @@ export class Warehouse {
     this.central = new CentralPlan();
     this.edges = ZONES.map(label=>new ZoneEdge(label));
     this.centralStages = new Map();
+    this.centralLocations = new Map();
+    this.positionPacket = null;
+    this.recoveryPhase = null;
     this.physicalScans = new Map();
     this.localTransfers = [];
     this.audit = null;
+    this.simTime = 0;
+    this.beltTime = 0;
+    this.checks = [];
+    this.checkTotals={passed:0,held:0};
+    this.handoffRecords = new Map();
+    this.transportLog = new Map();
+    this.clocks = new Map();
+    this.auditHistory = [];
+    this.now = now;
+    this.conveyorLeases = new Map();
     this.mode = 'online';
     this.daosEnabled = true;
     this.outageAt = null;
+    this.recoveryAt = null;
     this.reportedPhase = null;
     this.events = [];
+    this.startedAt=now;
+    this.specialEvents=[];
+    this.operatingMode='online';
     this.pending = 0;
     this.synced = 0;
     this.resetFleet();
-    const opening = [[38,5],[5,0],[4,5],[3,2],[4,0]];
+    const opening = compact?[[2,5],[3,0],[3,5],[3,2],[3,0]]:[[38,5],[5,0],[4,5],[3,2],[4,0]];
     for (const [stage,[count,start]] of opening.entries()) {
       for (let i=0; i<count; i++) {
         const id=`${BATCH}-${String(this.jobs.size+1).padStart(2,'0')}`;
         const position=(i+start)%9;
-        this.jobs.set(id,{id,stage,segment:position%3,lane:Math.floor(position/3),robot:null});
-        this.physicalScans.set(id,{stage,location:null});
+        this.jobs.set(id,{id,stage,segment:position%3,lane:0,robot:null,barcode:id,quantity:1,dock:position%3+1});
+        this.physicalScans.set(id,{stage,location:null,barcode:id,quantity:1,dock:position%3+1});
+        this.handoffRecords.set(id,{stage,actor:'입고 확인',location:null,barcode:id,quantity:1,dock:position%3+1});
       }
     }
     this.note('관제',`출고 배치 ${BATCH} · 상자 ${this.jobs.size}개, 진행 중인 공정부터 이어서 작업합니다.`);
@@ -85,11 +110,17 @@ export class Warehouse {
     this.events.unshift({actor,text,local,at:new Date().toLocaleTimeString('ko-KR',{hour12:false})});
     this.events.length=Math.min(this.events.length,75);
   }
+  recordSpecial(kind,title,detail,now=Date.now(),mode=null) {
+    this.specialEvents.push({kind,title,detail,now,mode});
+    if(mode)this.operatingMode=mode;
+  }
+
   sendBackup(now=Date.now(), log=true) {
     if (this.mode !== 'online') return false;
     this.backup = new Set([...this.jobs.values()].filter(job=>!job.auditHold&&job.stage<STAGES.length).map(job=>job.id));
     this.backupAt = now;
-    this.central.issue(this.robots,this.backup,this.epoch,now+BACKUP_LIFETIME_MS);
+    this.central.issue(this.robots,this.backup,this.epoch,now,now+BACKUP_LIFETIME_MS);
+    this.conveyorLeases=new Map(BELTS.map(belt=>[belt.id,{leaseId:`L-${this.epoch}-${now}-${belt.id}`,robotId:belt.id,resource:belt.id,epoch:this.epoch,from:now,until:now+BACKUP_LIFETIME_MS,taskIds:new Set(this.backup)}]));
     if(log)this.note('백업',`현장 작업표 전송 완료 · 상자 ${this.backup.size}개`);
     return true;
   }
@@ -98,40 +129,115 @@ export class Warehouse {
       this.sendBackup(now,false);
     }
   }
+  inventoryPositions() {
+    return new Map([...this.jobs].map(([id,job])=>{
+      const scan=this.physicalScans.get(id);
+      const robot=this.robots.find(robot=>robot.job===job);
+      const belt=job.belt;
+      let kind='station',holder=null,coordinates=scan?.location?.split(',').map(Number);
+      if(belt){
+        kind='conveyor';holder=belt.id;
+        coordinates=belt.from.map((value,i)=>value+(belt.to[i]-value)*belt.progress);
+      }else if(robot&&!STAGES[robot.stage].fixed&&!robot.fetching){
+        kind='robot';holder=robot.id;coordinates=robot.position;
+      }else if(robot&&STAGES[robot.stage].fixed&&robot.checked&&robot.work>0){
+        kind='arm';holder=robot.id;coordinates=robot.position;
+      }else if(job.stage===STAGES.length){
+        kind='shipped';holder=`DOCK-${job.dock}`;
+      }else if(!coordinates){
+        coordinates=job.stage===4?this.pickupFor(4,job):this.station(job.stage,job);
+      }
+      return [id,{
+        kind,holder,coordinates:coordinates?.map(value=>Math.round(value*100)/100)??null,
+        stage:job.stage,scan:scan?{...scan}:null,
+      }];
+    }));
+  }
+
   restore(now=Date.now()) {
     if (this.mode !== 'offline') return;
+    this.mode = 'recovering';
+    this.recoveryAt = now;
+    this.recoveryPhase = 'stop';
+    const positions=this.inventoryPositions();
+    const changed=[...positions].filter(([id,position])=>
+      JSON.stringify(position)!==JSON.stringify(this.centralLocations.get(id)));
+    this.positionPacket={epoch:this.epoch,capturedAt:now,positions,changed,received:false};
+    this.recordSpecial('recovery','서버 연결 복구','전환 순간의 상자 위치를 저장하고 메인 서버로 보냅니다.',now,'recovering');
+    this.note('관제','서버 연결 감지 · 로봇과 컨베이어를 1초 정지한 뒤 물건 위치부터 전송합니다.');
+  }
+
+  updateConnection(now=Date.now()) {
+    if(this.mode!=='recovering')return;
+    const delay=this.recoveryPhase==='stop'?OUTAGE_ALERT_MS:RECOVERY_STEP_MS;
+    if(now-this.recoveryAt<delay)return;
+    if(this.recoveryPhase==='stop'){
+      this.recoveryPhase='positions';
+      this.recoveryAt=now;
+      this.note('현장','상자 위치 전송 시작 · 작업대, 운반 로봇, 컨베이어 위치를 중앙으로 보냅니다.');
+    }else if(this.recoveryPhase==='positions'){
+      this.positionPacket.received=true;
+      this.recoveryPhase='reconcile';
+      this.recoveryAt=now;
+      this.note('관제',`위치 수신 완료 · 상자 ${this.positionPacket.positions.size}개 중 변경 ${this.positionPacket.changed.length}개 · 작업 이력 대조 시작`);
+    }else this.finishRestore(now);
+  }
+
+  finishRestore(now) {
+    const packet=this.positionPacket;
+    if(this.mode!=='recovering'||this.recoveryPhase!=='reconcile'||!packet?.received
+      ||packet.epoch!==this.epoch||now-this.recoveryAt<RECOVERY_STEP_MS)return;
     const grouped=new Map();
-    for (const event of this.localTransfers) {
-      const group=grouped.get(event.id)??[];
+    for(const event of this.localTransfers){
+      const group=grouped.get(event.taskId)??[];
       group.push(event);
-      grouped.set(event.id,group);
+      grouped.set(event.taskId,group);
     }
     let verified=0,held=0,confirmedEvents=0;
-    for(const [id,group] of grouped){
-      const job=this.jobs.get(id);
+    const results=[];
+    const candidates=new Set([...grouped.keys(),...packet.changed.map(([id])=>id)]);
+    for(const id of candidates){
+      const job=this.jobs.get(id), group=grouped.get(id)??[];
+      const unique=new Map();
+      let conflict=false;
+      for(const event of group){
+        const copy=unique.get(event.eventId);
+        if(copy&&!sameEvent(copy,event))conflict=true;
+        if(!copy)unique.set(event.eventId,event);
+      }
+      const chain=[...unique.values()].sort((a,b)=>a.from-b.from);
       let stage=this.centralStages.get(id);
-      const continuous=group.every(event=>event.epoch===this.epoch&&event.from===stage&&event.to===++stage
-        &&this.edges[event.zone].matches(event));
-      const scan=this.physicalScans.get(id);
-      if(continuous&&stage===job.stage&&scan?.stage===stage&&scan.location===group.at(-1).location){
+      const continuous=chain.every(event=>event.epoch===this.epoch&&event.from===stage&&event.to===++stage
+        &&event.scan==='OK'&&this.edges[event.zone].matches(event));
+      const position=packet.positions.get(id),scan=position?.scan,last=chain.at(-1);
+      const agreed=!conflict&&continuous&&stage===job.stage&&position?.stage===stage&&scan?.stage===stage
+        &&(!last||scan.location===last.location)
+        &&scan.barcode===job.barcode&&scan.quantity===job.quantity&&scan.dock===job.dock;
+
+      if(agreed){
         verified++;
-        confirmedEvents+=group.length;
-      } else {
+        confirmedEvents+=chain.length;
+        this.centralStages.set(id,stage);
+        this.centralLocations.set(id,position);
+      }else{
         job.auditHold=true;
         held++;
       }
+      results.push({taskId:id,agreed,events:chain});
     }
-    this.audit={verified,held,replicated:this.edges.reduce((total,edge)=>total+edge.log.size,0)};
-    this.mode = 'online';
+    this.audit={verified,held,received:packet.positions.size,changed:packet.changed.length,replicated:this.edges.reduce((total,edge)=>total+edge.log.size,0)};
+    this.auditHistory.push({epoch:this.epoch,results});
     this.epoch++;
-    this.synced += confirmedEvents;
-    this.pending = 0;
-    this.localTransfers = [];
-    for(const robot of this.robots)robot.localLog=[];
-    for(const edge of this.edges){edge.log.clear();edge.claims=0;}
+    this.mode='online';
+    this.recoveryPhase=null;
+    this.synced+=confirmedEvents;
+    this.pending=0;
+    this.localTransfers=[];
+    for(const edge of this.edges){edge.log.clear();edge.conflicts.clear();edge.claims=0;}
     this.backup.clear();
     this.backupAt = null;
     this.maintainBackup(now);
+    this.recordSpecial('restored','정상 운전 재개',`상자 위치 ${packet.positions.size}개 수신 · 변경 ${packet.changed.length}개 · 확인 보류 ${held}개`,now,'online');
     this.note('관제',`서버 복구 · 3중 대조 일치 ${verified}개, 확인 보류 ${held}개 · 운전 세대 ${this.epoch}`);
   }
   get backupRemaining() {
@@ -140,8 +246,8 @@ export class Warehouse {
   buffers() {
     const buffers=new Map();
     for(const job of this.jobs.values()){
-      if(job.robot || job.stage===0 || job.stage>=STAGES.length)continue;
-      const point=job.stage===1?this.station(1,job):job.stage===2?this.transfer(job):this.station(2,job);
+      if(job.robot || job.belt || job.stage===0 || job.stage>=STAGES.length)continue;
+      const point=job.stage===1?this.station(1,job):job.stage===2?this.station(2,job):this.station(3,job);
       const id=key(point);
       const buffer=buffers.get(id)??{point,count:0,stage:job.stage};
       buffer.count++;
@@ -156,16 +262,28 @@ export class Warehouse {
   }
   disconnect(now=Date.now()) {
     if (this.mode === 'offline') return;
+    const interruptedRecovery = this.mode === 'recovering';
     this.mode = 'offline';
+    this.recoveryAt = null;
     this.outageAt = now;
-    this.centralStages = new Map([...this.jobs].map(([id,job])=>[id,job.stage]));
+    this.recoveryPhase=null;
+    this.positionPacket=null;
+    if (!interruptedRecovery){
+      this.centralStages=new Map([...this.jobs].map(([id,job])=>[id,job.stage]));
+      const positions=this.inventoryPositions();
+      for(const [id,position] of positions){
+        if(!this.jobs.get(id).auditHold)this.centralLocations.set(id,position);
+      }
+    }
     this.reportedPhase = null;
-    this.note('관제','서버 연결 끊김 · 로봇 20대에 장애 경고를 표시합니다.');
+    this.recordSpecial('outage','서버 오류 · 연결 끊김','현장 설비가 멈췄습니다. DAOS 설정과 백업 작업표를 확인합니다.',now,'outage');
+    this.note('관제',`서버 연결 끊김 · 로봇 ${this.robots.length}대와 컨베이어를 1초 정지합니다.`);
   }
   alarmActive(now=Date.now()) {
     return this.mode==='offline'&&now-this.outageAt<OUTAGE_ALERT_MS;
   }
   offlinePhase(now=Date.now()) {
+    if (this.mode === 'recovering') return 'recovering';
     if (this.mode !== 'offline') return null;
     if (!this.daosEnabled) return 'stopped';
     if (this.backupAt===null) return 'waiting';
@@ -186,6 +304,12 @@ export class Warehouse {
     };
     if (phase === this.reportedPhase || !messages[phase]) return;
     this.reportedPhase = phase;
+    if(phase==='backup'){
+      this.recordSpecial('backup','DAOS 가동',`백업 작업표로 운전을 이어갑니다. 남은 백업 상자 ${this.backupRemaining}개.`,now,'backup');
+    }else if(['stopped','waiting','expired','drained'].includes(phase)){
+      const titles={stopped:'DAOS 꺼짐 · 안전 정지',waiting:'백업 작업표 대기',expired:'백업 작업표 만료',drained:'백업 작업 완료'};
+      this.recordSpecial('notice',titles[phase],messages[phase],now,'outage');
+    }
     this.note('관제',messages[phase]);
   }
   canHandoff(job) {
@@ -195,11 +319,11 @@ export class Warehouse {
   }
   station(stage, job) {
     const [x,y] = STAGES[stage].stations[job.segment];
-    return [x,y+(job.lane-1)*2];
+    return [x,y];
   }
   transfer(job) {
     const [,y] = this.station(2,job);
-    return [22,y];
+    return [18,y];
   }
   goalFor(stage, job) {
     if (stage === 0) return this.station(1,job);
@@ -207,43 +331,74 @@ export class Warehouse {
     return this.station(stage,job);
   }
   pickupFor(stage, job) {
-    if (stage === 2) return this.transfer(job);
-    if (stage === 4) return this.station(2,job);
+    if (stage === 4) {const [x,y]=this.station(3,job);return [x+1,y];}
     return stage < 2 ? this.station(stage,job) : null;
   }
   robotStatus(robot,phase) {
+    if (phase==='recovering') return '메인 전환 · 안전 정지';
     if (phase==='handover') return '운전 전환 대기';
     if (phase==='stopped'||phase==='expired') return '안전 정지';
+    if(phase==='backup'&&robot.drg==='RED')return '권한·엣지 확인 대기';
     if(robot.job?.auditHold)return '스캔 확인 대기';
     if (phase==='waiting') return '작업표 대기';
     if (phase==='drained') return '작업 완료';
+    if(robot.lastCheck?.ok===false&&!robot.job)return '불일치 · 확인 대기';
+    if(robot.checking)return '2차 검증 · 스캔 대조';
+    if(robot.checkUntil>this.simTime)return '2차 검증 통과';
     if (!robot.job) return key(robot.cell)===key(robot.home)?'인계 대기':'복귀 중';
     if (!robot.next && key(robot.cell)!==key(robot.target)) return '통행 대기';
     return robot.fetching?'인수 중':`${STAGES[robot.stage].label} 중`;
   }
-  tick(dt,now=Date.now()) {
-    const phase=this.offlinePhase(now);
-    if(phase==='expired'){
-      for(const robot of this.robots) this.advanceRobot(robot,dt);
-      return;
+  classify(robot,job,points,now,duration) {
+    if(job){
+      const evidence=this.handoffRecords.get(job.id);
+      if(job.auditHold||evidence?.stage!==job.stage||!this.central.permits(robot,job,points,this.epoch,now,duration))return 'RED';
     }
+    const needsEdge=points.some(point=>zoneOf(point)===1);
+    if(!needsEdge)return 'GREEN';
+    return this.edges[1].alive?'YELLOW':'RED';
+  }
+  setSharedEdge(alive) {
+    this.edges[1].alive=alive;
+    this.recordSpecial('notice',alive?'공유 통로 엣지 복구':'공유 통로 엣지 장애',alive?'통로 예약과 새 로그 복제가 재개됩니다.':'공유 통로의 추가 승인이 필요한 작업을 보류합니다.');
+    this.note('공유 통로 엣지',alive?'연결 복구 · 새 인계 기록 복제 재개':'연결 끊김 · 공유 통로 협상 불가');
+  }
+  tick(dt,now=Date.now()) {
+    this.now=now;
+    this.updateConnection(now);
+    const phase=this.offlinePhase(now);
     if (this.mode !== 'online' && phase !== 'backup') return;
+    this.simTime+=dt;
+    this.beltTime+=dt;
+    this.advanceBelts(dt,now);
     const occupied = new Set(this.robots.flatMap(robot => [key(robot.cell),...(robot.next?[key(robot.next)]:[])]));
     const reserved = new Set(this.robots.flatMap(robot=>robot.stations));
     for (const robot of this.robots) {
-      if(phase==='backup'&&robot.job&&!this.central.permits(robot,robot.job,[robot.target],this.epoch,now))continue;
+      if(robot.job?.auditHold)continue;
+      if(phase==='backup'&&robot.job){
+        const points=[robot.cell,robot.target];
+        if(robot.next)points.push(robot.next);
+        robot.drg=this.classify(robot,robot.job,points,now,350);
+        if(robot.drg==='RED')continue;
+      }
       if (!robot.job && !robot.next && key(robot.cell)===key(robot.home)) {
         for (const job of this.jobs.values()) {
-          if (job.robot || job.auditHold || job.stage!==robot.stage || (!this.backup.has(job.id)&&this.mode==='offline') || !this.canHandoff(job)) continue;
+          if (job.robot || job.belt || job.auditHold || (STAGES[robot.stage].fixed && job.segment!==Number(robot.id.slice(-1))-1) || job.stage!==robot.stage || (!this.backup.has(job.id)&&this.mode==='offline') || !this.canHandoff(job)) continue;
           const pickup = this.pickupFor(robot.stage,job);
           const goal = this.goalFor(robot.stage,job);
           const points=pickup?[pickup,goal]:[goal];
-          if(phase==='backup'&&!this.central.permits(robot,job,points,this.epoch,now))continue;
+          if(phase==='backup'){
+            const route=[...points,robot.cell];
+            const hops=route.slice(0,-1).reduce((sum,[x,y],i)=>sum+Math.abs(x-route[i+1][0])+Math.abs(y-route[i+1][1]),0);
+            robot.drg=this.classify(robot,job,route,now,6000+hops*400);
+            if(robot.drg==='RED')continue;
+          }
           const stations = points.map(key);
-          if (stations.some(id=>reserved.has(id)||occupied.has(id))) continue;
+          if (stations.some(id=>reserved.has(id)||(occupied.has(id)&&id!==key(robot.cell)))) continue;
           robot.job = job;
           job.robot = robot.id;
           robot.work = 0;
+          robot.checked=false;robot.checking=false;
           robot.target = pickup ?? goal;
           robot.fetching = Boolean(pickup);
           robot.stations = stations;
@@ -253,27 +408,34 @@ export class Warehouse {
       }
       if (!robot.next && key(robot.cell) === key(robot.target) && robot.job) {
         const job = robot.job;
+        if(phase==='backup'&&!this.central.permits(robot,job,[robot.cell],this.epoch,now,robot.checked?2500:5000)){robot.drg='RED';continue;}
+        if(!robot.checked){
+          robot.checking=true;robot.work+=dt;
+          if(robot.work<1.4)continue;
+          robot.checking=false;robot.work=0;
+          if(!this.verifyHandoff(robot,job)){robot.job=null;job.robot=null;robot.target=robot.home;for(const id of robot.stations)reserved.delete(id);robot.stations=[];continue;}
+          robot.checked=true;robot.checkUntil=this.simTime+1.2;
+          continue;
+        }
+        if(robot.checkUntil>this.simTime)continue;
+        const belt=BELTS.find(b=>b.stage===job.stage&&b.segment===job.segment);
+        const beltOccupied=belt&&[...this.jobs.values()].some(other=>other.belt?.id===belt.id);
+        if (STAGES[robot.stage].fixed && beltOccupied) continue;
         robot.work += dt;
-        if (robot.work < (robot.stage===3?1.25:.65)) continue;
+        if (robot.work < (STAGES[robot.stage].fixed?ARM_CYCLE_SECONDS:1.0)) continue;
         if (robot.fetching) {
           robot.fetching = false;
           robot.target = this.goalFor(robot.stage,job);
           robot.work = 0;
           continue;
         }
-        const from=job.stage++;
-        const location=robot.cell.join(',');
-        this.physicalScans.set(job.id,{stage:job.stage,location});
-        if(this.mode==='offline'){
-          const zone=zoneOf(robot.cell);
-          const event={key:`${robot.id}/${robot.localLog.length+1}`,id:job.id,from,to:job.stage,epoch:this.epoch,zone,location};
-          robot.localLog.push(event);
-          this.edges[zone].receive(event);
-          this.localTransfers.push(event);
-        }
+        if(belt){
+          if(beltOccupied)continue;
+          job.belt={...belt,progress:0,actor:robot.id};
+        }else this.completeStage(job,robot,robot.cell);
         robot.done++;
         const next = STAGES[job.stage]?.label;
-        this.note(robot.id,`${job.id} · ${next?`${STAGES[robot.stage].label} 완료 → ${next} 인계`:'트럭 상차 완료'}`,this.mode==='offline');
+        this.note(robot.id,`${job.id} · ${belt?`${belt.id} 컨베이어 투입`:next?`${STAGES[robot.stage].label} 완료 → ${next} 인계`:'트럭 상차 완료'}`,this.mode==='offline'&&!belt);
         job.robot = null;
         robot.job = null;
         robot.target = robot.home;
@@ -287,7 +449,12 @@ export class Warehouse {
         if (robot.next) {
           const cell=key(robot.next);
           if(phase==='backup'){
-            if(!this.edges[zoneOf(robot.next)].reserve(cell,occupied))robot.next=null;
+            const decision=this.classify(robot,robot.job,[robot.cell,robot.next],now,350);
+            robot.drg=decision;
+            if(decision==='RED')robot.next=null;
+            else if(decision==='YELLOW'){
+              if(!this.edges[1].reserve(cell,occupied))robot.next=null;
+            }else occupied.add(cell);
           } else occupied.add(cell);
         }
       }
@@ -298,9 +465,62 @@ export class Warehouse {
       this.advanceRobot(robot,dt,occupied);
     }
   }
+  verifyHandoff(robot,job){
+    const record=this.handoffRecords.get(job.id),scan=this.physicalScans.get(job.id);
+    const ok=record?.stage===job.stage&&scan?.stage===job.stage&&record.barcode===job.id&&scan.barcode===job.id
+      &&record.location===scan.location&&record.quantity===job.quantity&&scan.quantity===job.quantity&&record.dock===job.dock&&scan.dock===job.dock;
+    const check={id:job.id,robot:robot.id,previous:record?.actor??'기록 없음',ok,stage:job.stage,at:this.simTime};
+    this.checkTotals[ok?'passed':'held']++;
+    this.checks.unshift(check);this.checks.length=Math.min(this.checks.length,120);
+    robot.lastCheck=check;
+    if(!ok){
+      job.auditHold=true;
+      this.recordSpecial('notice','2차 검증 불일치',`${robot.id} · 상자 ${job.id} 후속 작업 보류`,this.now);
+      this.note(robot.id,`${job.id} · 2차 검증 불일치, 후속 작업 보류`);
+    }
+    return ok;
+  }
+  completeStage(job,actor,point){
+    const from=job.stage++;
+    const location=point.join(',');
+    // The simulated sensor channel is distinct from the upstream completion record.
+    const predecessorClock=this.handoffRecords.get(job.id)?.hlc;
+    const oldScan=this.physicalScans.get(job.id);
+    this.physicalScans.set(job.id,{...oldScan,stage:job.stage,location});
+    this.handoffRecords.set(job.id,{stage:job.stage,actor:actor.predecessor??actor.id,location,barcode:job.id,quantity:job.quantity,dock:job.dock});
+    if(this.mode==='offline'){
+      const zone=zoneOf(point);
+      const log=actor.localLog??this.transportLog.get(actor.id)??[];
+      if(!actor.localLog)this.transportLog.set(actor.id,log);
+      const clock=this.clocks.get(actor.id)??new HybridClock();
+      this.clocks.set(actor.id,clock);
+      const seq=log.length+1, scan=this.physicalScans.get(job.id);
+      const event=Object.freeze({
+        eventId:`${this.epoch}/${actor.id}/${seq}`, taskId:job.id, epoch:this.epoch,
+        seq,event:job.stage===STAGES.length?'SHIP_DONE':'HANDOFF_DONE',
+        hlc:Object.freeze(clock.tick(this.now,predecessorClock)),node:actor.id,rackId:null,
+        scan:scan.barcode===job.barcode&&scan.quantity===job.quantity&&scan.dock===job.dock?'OK':'MISMATCH',
+        barcode:scan.barcode,quantity:scan.quantity,dock:scan.dock,from,to:job.stage,zone,location,
+      });
+      this.handoffRecords.get(job.id).hlc=event.hlc;
+      log.push(event);
+      this.edges[zone].receive(event,this.epoch,this.now);
+      this.localTransfers.push(event);
+      if(!actor.localLog)this.note(actor.id,`${job.id} · 컨베이어 인계 완료`,true);
+    }
+  }
+  advanceBelts(dt,now){
+    for(const job of this.jobs.values()){
+      const belt=job.belt;if(!belt||job.auditHold)continue;
+      const lease=this.conveyorLeases.get(belt.id);
+      if(this.mode==='offline'&&!covers(lease,job.id,this.epoch,now,Math.ceil((1-belt.progress)*4500)))continue;
+      belt.progress=Math.min(1,belt.progress+dt/4.5);
+      if(belt.progress===1){this.completeStage(job,{id:belt.id,predecessor:belt.actor},belt.to);job.belt=null;}
+    }
+  }
   advanceRobot(robot,dt,occupied) {
     if(!robot.next)return;
-    robot.progress = Math.min(1,robot.progress + dt*5.8);
+    robot.progress = Math.min(1,robot.progress + dt*3.7);
     robot.position = robot.cell.map((value,i)=>value+(robot.next[i]-value)*robot.progress);
     if (robot.progress === 1) {
       occupied?.delete(key(robot.cell));

@@ -4,67 +4,132 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
-  <title>DAOS 물류센터 로봇 관제실</title>
-  <link rel="stylesheet" href="warehouse.css?v=6">
-  <script type="module" src="warehouse-view.mjs?v=6"></script>
+  <title>DAOS 물류 로봇 및 현장 시뮬레이터</title>
+  <link rel="stylesheet" href="warehouse.css?v=22">
+  <script type="module" src="warehouse-view.mjs?v=28"></script>
 </head>
-<body>
-  <header class="topbar"><a class="wordmark" href="https://daos-logistics.ryker6365.chatgpt.site/"><b>DAOS</b><span> / 통합 사이트</span></a><div class="top-actions"><a href="https://daos-dispatch-demo.ryker6365.chatgpt.site/central/" target="_blank" rel="noopener">메인 관제센터 ↗</a><span id="mode" class="server-state" role="status">시연 서버 연결됨</span></div></header>
+<body class="robot-lab">
+  <header class="topbar"><a class="wordmark" href="https://daos-logistics.ryker6365.chatgpt.site/"><b>DAOS</b><span> / 물류 현장 시뮬레이터</span></a><div class="top-actions"><a href="/project.html">시스템 설명 ↗</a><span id="mode" class="server-state" role="status">시연 서버 연결됨</span></div></header>
   <main class="frame">
     <section class="head">
-      <div><p class="kicker">물류 현장</p><h1>물류센터 로봇 관제실</h1><p>로봇 20대가 같은 출고 배치의 상자를 다음 공정에 넘기며 움직입니다.</p></div>
+      <div><p class="kicker">창고 장애 대응 시연</p><h1>물류 로봇 및 현장 시뮬레이터</h1><p>서버 연결을 끊어 보세요. 현장에 저장된 작업표로 상자가 계속 이동하는지 확인할 수 있습니다.</p></div>
       <div class="controls"><button id="send-backup" class="send-backup" type="button">백업 작업표 전송</button><button id="pause" type="button">일시정지</button><button id="reset" type="button">다시 시작</button></div>
     </section>
-    <section class="panel operation" aria-labelledby="operation-title">
-      <div><h2 id="operation-title">장애 시연 제어</h2><p>백업 작업표는 연결된 동안 자동으로 갱신됩니다. 시연 서버를 끊고 DAOS를 켰을 때와 껐을 때의 동작을 비교해 보세요.</p></div>
-      <div class="operation-actions">
-        <button id="daos-switch" type="button" role="switch" aria-label="DAOS 백업 운전" aria-checked="true"><span>DAOS</span><strong id="daos-value">ON</strong></button>
-        <button id="connection" class="danger" type="button">서버 연결 끊기</button>
+    <div class="simulation-layout">
+    <section class="panel map-panel" aria-labelledby="floor-title">
+      <div class="panel-head">
+        <div><p class="kicker">이동 로봇 12대 · 로봇 팔 6대 · 컨베이어 6대</p><h2 id="floor-title">물류센터 배치도</h2></div>
+        <div class="map-status">
+          <strong id="work-source" data-phase="online">중앙 서버 작업표 사용 중</strong>
+          <span id="active" class="time">이동 및 작업 0 / 18대</span>
+
+        </div>
       </div>
-      <p id="audit-result" class="backup-result" role="status" hidden></p>
-      <p id="backup-result" class="backup-result" role="status">현장 작업표 자동 갱신 중</p>
+      <div class="map-focus">
+        <div class="map-focus-robot"><span>선택 로봇</span><strong id="map-robot"></strong><span id="map-robot-status"></span></div>
+        <p>배치도에서 로봇을 선택하거나 아래 로봇 상태 목록을 확인하세요.</p>
+      </div>
+      <div class="canvas-wrap"><canvas id="warehouse" width="1320" height="700" aria-label="물류센터의 트럭, 선반, 공유 통로와 역할별 로봇 18대"></canvas></div>
+      <div id="legend" class="map-key"></div>
+      <section class="operations-overview" aria-labelledby="overview-title">
+        <div class="panel-head">
+          <h2 id="overview-title">운영 이벤트</h2>
+          <div class="event-filters" role="group" aria-label="이벤트 보기">
+            <button id="show-all-events" type="button" aria-controls="all-event-panel" aria-pressed="true">전체 이벤트</button>
+            <button id="show-special-events" type="button" aria-controls="special-event-panel" aria-pressed="false">특수 이벤트</button>
+          </div>
+        </div>
+        <div id="all-event-panel">
+          <ol id="events" class="events" aria-label="전체 작업 로그"><li>작업표를 기다리는 중입니다.</li></ol>
+        </div>
+        <div id="special-event-panel" class="special-log" hidden>
+          <p id="special-empty">서버 연결이나 운전 상태가 바뀌면 이곳에 기록됩니다.</p>
+          <ol id="special-events" aria-label="주요 운영 이벤트"></ol>
+        </div>
+      </section>
+      <details class="record-inspector"><summary>선택 로봇의 점유권과 작업 이력</summary>
+        <p>배치도에서 로봇을 선택하세요. 작업 이력은 장애 중 공정을 완료하면 추가됩니다.</p>
+        <pre id="robot-records"></pre>
+      </details>
+      <div class="facility-strip"><strong id="facility-mode">컨베이어 준비 중</strong><span id="belt-count"></span><span>말풍선에서 2차 검증 과정을 확인하세요.</span></div>
+      <section class="handoff-panel" aria-label="후속 공정 2차 검증"><p class="kicker">인계 기록 × 가상 실물 스캔</p><h3>다음 로봇이 한 번 더 확인합니다</h3><strong id="check-count"></strong><p id="check-latest"></p></section>
+    </section>
+      <aside class="simulation-sidebar" aria-label="시연 제어와 현장 정보">
+        <section class="panel simulation-controls"><p class="kicker">장애 대응 비교</p><h2>시연 제어</h2><p>DAOS를 켜고 서버 연결을 끊어 보세요.<br>장애·복구 감지 시 1초 정지합니다.<br>정상 복귀 시 전환 순간의 상자 위치를 메인 서버에 먼저 보냅니다.</p><div class="simulation-buttons">
+          <button id="daos-switch" type="button" role="switch" aria-label="DAOS 백업 운전" aria-checked="true"><span>DAOS</span><strong id="daos-value">ON</strong></button>
+          <button id="connection" class="danger" type="button">시연 서버 연결 끊기</button>
+        </div></section>
+    <section class="panel live-overview" aria-labelledby="live-overview-title">
+      <div class="live-overview-head"><h2 id="live-overview-title">운전 타임라인</h2><span id="overview-mode" class="overview-mode">정상 운전</span></div>
+      <div class="live-overview-body">
+        <div class="ring-wrap">
+          <div id="mode-timeline" class="mode-ring" role="img" aria-label="시연 시작"></div>
+          <div class="ring-caption" aria-hidden="true"><strong id="run-elapsed">00:00</strong><span>경과 시간</span></div>
+        </div>
+        <div class="overview-progress">
+          <div><span>출고 진행률</span><strong id="shipment-percent">0%</strong></div>
+          <progress id="shipment-progress" value="0" max="14" aria-label="출고 진행률"></progress>
+          <p id="shipment-count">0 / 14개 상차 완료</p>
+        </div>
+      </div>
+      <ul class="timeline-key"><li data-mode="online">정상</li><li data-mode="outage">장애·대기</li><li data-mode="backup">DAOS</li><li data-mode="recovering">복구 전환</li></ul>
+      <p class="ring-direction">정상 시연 약 1분 · 마지막 상차 시 한 바퀴 완성</p>
     </section>
     <section id="incident" class="incident" data-phase="online" role="status">
       <span class="incident-icon" id="incident-icon" aria-hidden="true">✓</span>
-      <div><strong id="incident-title">연결 운전</strong><p id="incident-detail">각 로봇이 같은 출고 배치의 작업 순서를 공유합니다.</p></div>
+      <div><div class="incident-heading"><strong id="incident-title">연결 운전</strong><span id="stop-warning" hidden>주의</span></div><p id="incident-detail">각 로봇이 같은 출고 배치의 작업 순서를 공유합니다.</p></div>
     </section>
+      <ol class="outage-track" aria-label="장애 대응 단계">
+        <li id="step-prepare" aria-current="step"><span>01 · 사전 준비</span><strong id="track-prepare">작업표 확인 중</strong></li>
+        <li id="step-continue"><span>02 · 장애 중 운전</span><strong id="track-continue">연결 끊기 대기</strong></li>
+        <li id="step-reconcile"><span>03 · 복구 후 대조</span><strong id="track-reconcile">연결 복구 대기</strong></li>
+      </ol>
+      <details id="position-transfer" class="record-inspector" hidden>
+        <summary>전환 시점 위치 데이터 보기</summary>
+        <p>전송 위치는 설비를 멈춘 순간의 창고 격자 좌표입니다. 변경된 상자를 우선 표시합니다.</p>
+        <pre id="position-transfer-sample"></pre>
+      </details>
+      <p id="backup-result" class="backup-result map-result" role="status">현장 작업표 자동 갱신 중</p>
+      <p id="audit-result" class="backup-result map-result" role="status" hidden></p>
     <section class="metrics" aria-label="운영 현황">
       <div><span>운전 모드</span><strong id="drive-mode">확인 중</strong></div>
       <div><span>공동 출고 배치</span><strong id="batch">A-01</strong></div>
       <div><span>처리할 상자</span><strong id="total">0개</strong></div>
       <div><span>현장 백업 작업표</span><strong id="backup">미전송</strong></div>
-      <div><span>상차 완료</span><strong id="completed">0건</strong></div>
+      <div><span>상차 완료</span><strong id="completed">0개</strong></div>
       <div><span>로컬 공정 기록</span><strong id="pending">0건</strong></div>
     </section>
+      </aside>
+    </div>
+    <details class="panel operations-details">
+      <summary>로봇 상태 및 공정 상세</summary>
     <section class="panel layer-panel" aria-labelledby="layer-title">
       <div class="panel-head"><div><p class="kicker">보고서 2.2 적용 · 브라우저 시연</p><h2 id="layer-title">중앙 · 구역 엣지 · 로봇</h2></div><a href="/project.html#architecture">시스템 구조 보기 ↗</a></div>
       <div class="layer-grid">
         <article><h3>01 중앙</h3><p>작업·구역 권한 발급 / 복구 대조</p><strong id="central-layer"></strong></article>
-        <article><h3>02 구역 엣지</h3><p>이동 칸 점유 조정 / 현장 로그 복제</p><ul id="edge-layer" class="layer-zones"></ul></article>
-        <article><h3>03 로봇</h3><p>선행 공정·점유권 확인 / 로컬 실행</p><strong id="robot-layer"></strong></article>
+        <article><h3>02 구역 엣지</h3><p>이동 칸 점유 조정 / 현장 로그 복제</p><ul id="edge-layer" class="layer-zones"></ul><button id="shared-edge" type="button" aria-pressed="false">공유 통로 엣지 끊기</button></article>
+        <article><h3>03 로봇</h3><p>선행 공정·점유권 확인 / 로컬 실행</p><strong id="robot-layer"></strong><p id="drg-status"></p></article>
       </div>
     </section>
-    <section class="panel map-panel" aria-labelledby="floor-title">
-      <div class="panel-head"><div><p class="kicker">공유 통로 · 작업대 15곳</p><h2 id="floor-title">물류센터 배치도</h2></div><span id="active" class="time">이동 및 작업 0 / 20대</span></div>
-      <p id="notice" class="notice">하차한 상자를 다음 공정이 인수합니다.</p>
-      <div class="canvas-wrap"><canvas id="warehouse" width="1320" height="700" aria-label="물류센터의 트럭, 선반, 공유 통로와 역할별 로봇 20대"></canvas></div>
-      <div id="legend" class="map-key"></div>
-    </section>
     <section class="panel stages" aria-labelledby="stages-title">
-      <div class="panel-head"><div><p class="kicker">같은 상자가 이동하는 순서</p><h2 id="stages-title">하차 → 운반 → 분류 → 출차 배정 → 상차</h2></div></div>
+      <div class="panel-head"><div><p class="kicker">같은 상자가 이동하는 순서</p><h2 id="stages-title">하차 → AMR 운반 → 비전 분류 → 팔레트 적재 → 상차</h2></div></div>
       <div class="metrics pipeline" id="pipeline"></div>
     </section>
     <div class="dashboard">
       <section class="panel inspector" aria-labelledby="fleet-title">
-        <div class="panel-head"><div><p class="kicker">로봇 20대</p><h2 id="fleet-title">로봇 상태</h2></div></div>
+        <div class="panel-head"><h2 id="fleet-title">로봇 상태 <small>18대</small></h2></div>
         <div id="fleet" class="fleet"></div>
       </section>
-      <section class="panel log-panel" aria-labelledby="log-title">
-        <div id="detail" class="manual"><p class="kicker">선택한 로봇 · 비상 매뉴얼</p><h3 id="robot-name"></h3><p id="robot-rule"></p><p id="robot-note" class="action-note"></p><p id="robot-task" class="task-note"></p></div>
-        <div class="panel-head"><div><p class="kicker">현장 기록</p><h2 id="log-title">운영 이벤트</h2></div></div>
-        <ol id="events" class="events"><li>작업표를 기다리는 중입니다.</li></ol>
+      <section class="panel log-panel" aria-labelledby="robot-name">
+        <div id="detail" class="manual"><p class="kicker">선택한 로봇 · 비상 매뉴얼</p><h3 id="robot-name"></h3><p id="robot-rule"></p><p id="robot-note" class="action-note"></p><p id="robot-task" class="task-note"></p><p id="robot-check" class="action-note"></p></div>
       </section>
     </div>
+    </details>
+    <details class="research-note"><summary>보고서와 논문에서 가져온 원리</summary>
+        <p>스마트 물류 보고서 2.2의 중앙·엣지·로봇 구조를 바탕으로 컨베이어를 구역 엣지의 제어 대상으로 확장했습니다. 작업표와 설비 사용 권한을 미리 저장하고, 장애·복구 시 1초 정지합니다.</p>
+        <p><a href="https://daos-logistics.ryker6365.chatgpt.site/papers.html#coda">Coda</a>의 단절 운영은 사전 저장에, <a href="https://daos-logistics.ryker6365.chatgpt.site/papers.html#bayou">Bayou</a>의 의존성 검사는 선행 공정 확인에, <a href="https://daos-logistics.ryker6365.chatgpt.site/papers.html#chubby">Chubby</a>의 권한 세대 검사는 낡은 명령 차단에 참고했습니다. 후속 로봇의 2차 스캔은 이를 물류 인계에 적용한 DAOS 설계이며, 해당 논문이 로봇의 실물 검증 성능을 입증한 것은 아닙니다.</p>
+        <p>이 시연의 실물 스캔·센서·컨베이어 제어는 가상 모델입니다. 1초 정지는 시연 규칙이며 실제 설비의 안전 인증값이 아닙니다. 같은 센서의 공통 오류나 눈에 보이지 않는 파손까지 검출하지는 않습니다.</p>
+      </details>
     <p class="disclosure">작업표 유효시간과 서버·현장 로그·가상 스캔 대조는 이 탭에서 재현합니다. 메인 서버 주문이나 기사 앱의 배송 상태에는 영향을 주지 않습니다. </p>
   </main>
 </body>

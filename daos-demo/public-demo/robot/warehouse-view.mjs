@@ -1,5 +1,5 @@
-import {BATCH,STAGES,Warehouse} from './warehouse-engine.mjs?v=28';
-import {createScene} from './warehouse-scene.mjs?v=31';
+import {BATCH,STAGES,Warehouse} from './warehouse-engine.mjs?v=29';
+import {createScene} from './warehouse-scene.mjs?v=32';
 
 const $=id=>document.getElementById(id);
 const canvas=$('warehouse');
@@ -216,7 +216,7 @@ function paint(){
   paintOverview(finished,jobs.length);
   const drop=sim.dropIncident;
   const dropLabels={
-    isolated:['AM 박스 낙하 · 통행 제한','해당 로봇은 정지하고 주변 로봇은 낙하 칸을 피합니다.'],
+    isolated:['AM 박스 낙하 · 통행 제한','해당 로봇은 정지하고 주변 로봇은 낙하 지점 주변의 점유 칸을 피합니다.'],
     inspection:['현장 확인 · 재스캔','담당자가 모의 점검을 하고 재적재 전 상자 코드·수량·도크를 확인합니다.'],
     held:['확인 보류 · 격리 유지','대조 결과가 일치하지 않아 해당 상자와 낙하 구역을 보류합니다.'],
     resumed:['낙하 대응 완료 · 운반 재개','재스캔 일치와 담당자 모의 승인 후 같은 상자의 운반을 이어갑니다.'],

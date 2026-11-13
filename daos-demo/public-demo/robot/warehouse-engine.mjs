@@ -108,7 +108,7 @@ export class Warehouse {
     this.events = [];
     this.startedAt=now;
     this.specialEvents=[];
-    this.dropAt=dropChance>0&&random()*100<dropChance?now+12_000+random()*30_000:null;
+    this.dropAt=dropChance>0&&random()*100<dropChance?now+12_000+random()*(DROP_CUTOFF_MS-12_000):null;
     this.dropIncident=null;
     this.operatingMode='online';
     this.pending = 0;
@@ -529,10 +529,13 @@ export class Warehouse {
     }
     if(this.dropAt===null||now<this.dropAt||now-this.startedAt>=DROP_CUTOFF_MS)return;
     const robot=this.robots.find(robot=>robot.stage===1&&robot.job&&!robot.job.auditHold
-      &&!robot.fetching&&!robot.next&&robot.route.length&&key(robot.cell)!==key(robot.target));
+      &&!robot.fetching&&robot.next&&robot.progress>0
+      &&key(robot.cell)!==key(this.pickupFor(1,robot.job)));
     if(!robot)return;
-    this.dropIncident={robotId:robot.id,taskId:robot.job.id,point:[...robot.cell],startedAt:this.simTime,phase:'isolated'};
-    this.logDrop('AM 운반 중 박스 낙하','해당 로봇을 정지하고 낙하 칸의 통행을 제한합니다.',now);
+    const point=robot.position.map(value=>Math.round(value*100)/100);
+    // Keep both occupied cells reserved while the robot is stopped between them.
+    this.dropIncident={robotId:robot.id,taskId:robot.job.id,point,startedAt:this.simTime,phase:'isolated'};
+    this.logDrop('AM 운반 중 박스 낙하','해당 로봇을 정지하고 낙하 지점 주변의 통행을 제한합니다.',now);
   }
 
   tick(dt,now=Date.now()) {

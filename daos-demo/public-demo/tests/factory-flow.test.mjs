@@ -64,18 +64,27 @@ const drop=reachDrop(incidentRun);
 const affected=incidentRun.robots.find(robot=>robot.id===drop.robotId);
 assert.equal(affected.stage,1);
 assert.equal(drop.phase,'isolated');
+assert.notDeepEqual(affected.cell,incidentRun.pickupFor(1,affected.job));
+assert.ok(affected.progress>0&&affected.progress<1);
+assert.ok(drop.point.some(value=>!Number.isInteger(value)));
+const stoppedPosition=[...affected.position];
+const blockedCells=[affected.cell,affected.next].map(point=>point.join(','));
 assert.equal(incidentRun.inventoryPositions().get(drop.taskId).kind,'floor');
 const progress=incidentRun.kpi.online.stages;
 runTo(incidentRun,incidentRun.now+2_100);
 assert.equal(drop.phase,'inspection');
-assert.deepEqual(affected.cell,drop.point);
+assert.deepEqual(affected.position,stoppedPosition);
 assert.ok(incidentRun.robots.every(robot=>robot===affected||
-  [robot.cell,robot.next].every(point=>point?.join(',')!==drop.point.join(','))));
+  [robot.cell,robot.next].every(point=>!blockedCells.includes(point?.join(',')))));
 assert.ok(incidentRun.kpi.online.stages>=progress);
 runTo(incidentRun,130_000);
 assert.equal(drop.phase,'resumed');
 assert.equal(incidentRun.jobs.get(drop.taskId).stage,5);
 assert.equal(incidentRun.specialEvents.filter(event=>event.kind==='drop').length,3);
+
+const laterRun=new Warehouse(0,{compact:true,dropChance:100,random:()=>.92});
+reachDrop(laterRun);
+assert.ok(laterRun.now>=80_000&&laterRun.now<90_000);
 
 const cutoff=dropRun(100);
 cutoff.dropAt=90_000;

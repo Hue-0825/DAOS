@@ -70,6 +70,11 @@ export const DROP_CUTOFF_MS=90_000;
 const DROP_INSPECTION_SECONDS=2;
 const DROP_RECOVERY_SECONDS=5;
 
+export function hasCargo(robot) {
+  return Boolean(robot.job && (!robot.fetching ||
+    (robot.stage===1 && robot.checked && robot.work>0)));
+}
+
 export class Warehouse {
   constructor(now=Date.now(), {compact=false,dropChance=0,random=Math.random}={}) {
     this.jobs = new Map();
@@ -193,7 +198,7 @@ export class Warehouse {
       }else if(belt){
         kind='conveyor';holder=belt.id;
         coordinates=belt.from.map((value,i)=>value+(belt.to[i]-value)*belt.progress);
-      }else if(robot&&!STAGES[robot.stage].fixed&&!robot.fetching){
+      }else if(robot&&!STAGES[robot.stage].fixed&&hasCargo(robot)){
         kind='robot';holder=robot.id;coordinates=robot.position;
       }else if(robot&&STAGES[robot.stage].fixed&&robot.checked&&robot.work>0){
         kind='arm';holder=robot.id;coordinates=armTransferPose(robot,this.simTime).cargo.slice(0,2);
@@ -349,7 +354,7 @@ export class Warehouse {
     for(const job of this.jobs.values()){
       if(job.belt||job.stage>=STAGES.length&&!job.auditHold)continue;
       const robot=job.robot&&this.robots.find(item=>item.id===job.robot);
-      if(robot&&!robot.fetching)continue;
+      if(robot&&hasCargo(robot))continue;
       const point=job.stage>=STAGES.length?this.station(4,job):job.stage===4?this.pickupFor(4,job):this.station(job.stage,job);
       const id=key(point);
       const buffer=buffers.get(id)??{point,count:0,held:0,stage:job.stage};
@@ -528,14 +533,14 @@ export class Warehouse {
       return;
     }
     if(this.dropAt===null||now<this.dropAt||now-this.startedAt>=DROP_CUTOFF_MS)return;
-    const robot=this.robots.find(robot=>robot.stage===1&&robot.job&&!robot.job.auditHold
-      &&!robot.fetching&&robot.next&&robot.progress>0
-      &&key(robot.cell)!==key(this.pickupFor(1,robot.job)));
+    const robot=this.robots.find(robot=>robot.stage===1&&hasCargo(robot)&&!robot.job.auditHold);
     if(!robot)return;
     const point=robot.position.map(value=>Math.round(value*100)/100);
     // Keep both occupied cells reserved while the robot is stopped between them.
     this.dropIncident={robotId:robot.id,taskId:robot.job.id,point,startedAt:this.simTime,phase:'isolated'};
-    this.logDrop('AM 운반 중 박스 낙하','해당 로봇을 정지하고 낙하 지점 주변의 통행을 제한합니다.',now);
+    const handling=robot.fetching?'들어 올리는 중':robot.next?'이동 중':
+      key(robot.cell)===key(robot.target)&&robot.work>0?'내려놓는 중':'상자를 든 채 대기 중';
+    this.logDrop('AM 박스 낙하',`${handling} 낙하 · 해당 로봇을 정지하고 주변 통행을 제한합니다.`,now);
   }
 
   tick(dt,now=Date.now()) {

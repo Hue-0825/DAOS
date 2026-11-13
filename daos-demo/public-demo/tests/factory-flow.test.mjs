@@ -60,11 +60,12 @@ for(const warehouse of [never,missed]){
   assert.equal(warehouse.dropIncident,null);
 }
 const incidentRun=dropRun(33,.32);
+incidentRun.dropAt=13_600;
 const drop=reachDrop(incidentRun);
 const affected=incidentRun.robots.find(robot=>robot.id===drop.robotId);
 assert.equal(affected.stage,1);
 assert.equal(drop.phase,'isolated');
-assert.notDeepEqual(affected.cell,incidentRun.pickupFor(1,affected.job));
+assert.equal(affected.fetching,false);
 assert.ok(affected.progress>0&&affected.progress<1);
 assert.ok(drop.point.some(value=>!Number.isInteger(value)));
 const stoppedPosition=[...affected.position];
@@ -81,6 +82,17 @@ runTo(incidentRun,130_000);
 assert.equal(drop.phase,'resumed');
 assert.equal(incidentRun.jobs.get(drop.taskId).stage,5);
 assert.equal(incidentRun.specialEvents.filter(event=>event.kind==='drop').length,3);
+
+for(const [at,handling] of [[12_600,'들어 올리는 중'],[13_550,'상자를 든 채 대기 중'],[21_700,'내려놓는 중']]){
+  const stationary=dropRun(100);
+  stationary.dropAt=at;
+  const drop=reachDrop(stationary);
+  assert.equal(stationary.now,at);
+  assert.ok(stationary.specialEvents.some(event=>event.kind==='drop'&&event.detail.includes(handling)));
+  assert.equal(stationary.inventoryPositions().get(drop.taskId).kind,'floor');
+  runTo(stationary,135_000);
+  assert.equal(stationary.jobs.get(drop.taskId).stage,5);
+}
 
 const laterRun=new Warehouse(0,{compact:true,dropChance:100,random:()=>.92});
 reachDrop(laterRun);

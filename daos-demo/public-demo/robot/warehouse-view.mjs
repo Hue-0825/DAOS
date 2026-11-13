@@ -1,5 +1,5 @@
-import {BATCH,STAGES,Warehouse} from './warehouse-engine.mjs?v=29';
-import {createScene} from './warehouse-scene.mjs?v=32';
+import {BATCH,STAGES,Warehouse} from './warehouse-engine.mjs?v=30';
+import {createScene} from './warehouse-scene.mjs?v=33';
 
 const $=id=>document.getElementById(id);
 const canvas=$('warehouse');

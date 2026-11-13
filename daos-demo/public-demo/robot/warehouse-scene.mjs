@@ -1,4 +1,4 @@
-import {PARKING,RACKS,SIZE,STAGES,BELTS,inFloor,armTransferPose} from './warehouse-engine.mjs?v=29';
+import {PARKING,RACKS,SIZE,STAGES,BELTS,inFloor,armTransferPose,hasCargo} from './warehouse-engine.mjs?v=30';
 
 const W=1320,H=700;
 const project=(x,y,z=0)=>[540+(x-y)*20,69+(x+y)*10.7-z];
@@ -313,7 +313,7 @@ export function createScene(canvas){
         break;
     }
     const dropped=sim.dropIncident?.robotId===robot.id&&sim.dropIncident.phase!=='resumed';
-    if(robot.job&&!robot.fetching&&!STAGES[robot.stage].fixed&&!dropped){
+    if(hasCargo(robot)&&!STAGES[robot.stage].fixed&&!dropped){
       const offset=robot.stage===0?.23:-.17;
       prism(ctx,x+offset,y-.16,.34,.34,deck,7,boxes[robot.stage%boxes.length]);
       line(ctx,[project(x+offset+.15,y-.15,deck+7),project(x+offset+.15,y+.17,deck+7)],'#e0c29a',1);

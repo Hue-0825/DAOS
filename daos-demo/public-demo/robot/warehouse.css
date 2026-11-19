@@ -203,3 +203,14 @@ button,select{font:inherit;font-size:13px;min-height:40px;border-radius:8px;padd
 .drop-status[data-phase=resumed]{border-color:#a8cabb;background:#eef8f3;color:#185d43}
 .drop-status[data-phase=resumed] .incident-icon{background:#286c50}
 #special-events [data-kind=drop] strong{color:#92263b}
+
+.drop-response{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.drop-response h3{font-size:15px;margin:0 0 8px}
+.drop-response strong{display:block;font-size:14px;color:#544a71}
+.drop-response p{margin:5px 0 10px;font-size:13px;color:#4b455f;line-height:1.6}
+.drop-response ol{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;list-style:none;padding:0;margin:0}
+.drop-response li{padding:9px 3px;text-align:center;background:#efedf4;border:1px solid #d8d3e3;border-radius:5px;font-size:12px;color:#6b637b}
+.drop-response li[data-state=active]{background:#fff0e4;border-color:#b56c20;color:#84410a;font-weight:700}
+.drop-response li[data-state=done]{background:#e6f3ec;border-color:#69a68a;color:#185c40;font-weight:700}
+.drop-response[data-phase=isolated] strong,.drop-response[data-phase=held] strong{color:#a1263a}
+.drop-response[data-phase=resumed] strong{color:#176749}

@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
   <title>DAOS 로봇 시뮬레이터</title>
-  <link rel="stylesheet" href="warehouse.css?v=29">
-  <script type="module" src="warehouse-view.mjs?v=38"></script>
+  <link rel="stylesheet" href="warehouse.css?v=30">
+  <script type="module" src="warehouse-view.mjs?v=39"></script>
 </head>
 <body class="robot-lab">
   <header class="topbar"><a class="wordmark" href="https://daos-logistics.ryker6365.chatgpt.site/"><b>DAOS</b><span> / 로봇 시뮬레이터</span></a><div class="top-actions"><a href="/project.html">시스템 설명 ↗</a><span id="mode" class="server-state" role="status">시연 서버 연결됨</span></div></header>
@@ -104,14 +104,20 @@
       </div>
       <ul class="timeline-key"><li data-mode="online">정상</li><li data-mode="outage">장애·대기</li><li data-mode="backup">DAOS</li><li data-mode="recovering">복구 전환</li></ul>
       <p class="ring-direction">정상 시연 약 2분 · 마지막 상차 시 한 바퀴 완성</p>
+      <section id="drop-status" class="drop-response" aria-labelledby="drop-heading" data-phase="waiting">
+        <h3 id="drop-heading">낙하 대응</h3>
+        <div role="status"><strong id="drop-title">낙하 발생 대기</strong><p id="drop-detail">박스 낙하 시 발생 위치와 대응 단계를 표시합니다.</p></div>
+        <ol aria-label="낙하 대응 단계">
+          <li id="drop-step-isolate"><span>발생·통제</span></li>
+          <li id="drop-step-inspect"><span>확인·재스캔</span></li>
+          <li id="drop-step-resume"><span>재적재·재개</span></li>
+        </ol>
+      </section>
+
     </section>
     <section id="incident" class="incident" data-phase="online" role="status">
       <span class="incident-icon" id="incident-icon" aria-hidden="true">✓</span>
       <div><div class="incident-heading"><strong id="incident-title">연결 운전</strong><span id="stop-warning" hidden>주의</span></div><p id="incident-detail">각 로봇이 같은 출고 배치의 작업 순서를 공유합니다.</p></div>
-    </section>
-    <section id="drop-status" class="incident drop-status" role="status" hidden>
-      <span class="incident-icon" aria-hidden="true">!</span>
-      <div><strong id="drop-title"></strong><p id="drop-detail"></p></div>
     </section>
       <details class="panel record-inspector run-details">
         <summary>운전 상태 및 복구 상세</summary>

@@ -222,14 +222,25 @@ function paint(){
     resumed:['낙하 대응 완료 · 운반 재개','재스캔 일치와 담당자 모의 승인 후 같은 상자의 운반을 이어갑니다.'],
   };
   const dropStatus=$('drop-status');
-  dropStatus.hidden=!drop;
+
   if(drop&&dropStatus.dataset.phase!==drop.phase){
     dropStatus.dataset.phase=drop.phase;
     const [heading,detail]=dropLabels[drop.phase];
     set('drop-title',heading);
     set('drop-detail',`${drop.robotId} · ${drop.taskId} · (${drop.point.join(', ')}) — ${detail}`);
   }
-  if(!drop)delete dropStatus.dataset.phase;
+  if(!drop&&dropStatus.dataset.phase!=='waiting'){
+    dropStatus.dataset.phase='waiting';
+    set('drop-title','낙하 발생 대기');
+    set('drop-detail','박스 낙하 시 발생 위치와 대응 단계를 표시합니다.');
+  }
+  const currentDropStep=drop?({isolated:0,inspection:1,held:1,resumed:2}[drop.phase]):-1;
+  ['drop-step-isolate','drop-step-inspect','drop-step-resume'].forEach((id,index)=>{
+    const step=$(id);
+    step.dataset.state=index<currentDropStep||drop?.phase==='resumed'?'done':index===currentDropStep?'active':'waiting';
+    if(index===currentDropStep)step.setAttribute('aria-current','step');
+    else step.removeAttribute('aria-current');
+  });
   paintPositionComparison();
   const connection=$('connection');
   $('mode').dataset.mode=sim.mode;

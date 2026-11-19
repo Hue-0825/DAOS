@@ -1,4 +1,4 @@
-import {BATCH,STAGES,Warehouse} from './warehouse-engine.mjs?v=30';
+import {BATCH,STAGES,Warehouse} from './warehouse-engine.mjs?v=31';
 import {createScene} from './warehouse-scene.mjs?v=33';
 
 const $=id=>document.getElementById(id);
@@ -66,8 +66,8 @@ const stages=STAGES.map(role=>{
   return count;
 });
 
-const modes={online:'정상 운전',outage:'장애·대기',backup:'DAOS 운전',recovering:'복구 전환'};
-const modeColors={online:'var(--timeline-online)',outage:'var(--timeline-outage)',backup:'var(--timeline-backup)',recovering:'var(--timeline-recovering)'};
+const modes={online:'정상 운전',outage:'장애·대기',backup:'DAOS 운전',recovering:'복구 전환',drop:'낙하 대응'};
+const modeColors={online:'var(--timeline-online)',outage:'var(--timeline-outage)',backup:'var(--timeline-backup)',recovering:'var(--timeline-recovering)',drop:'#bf2780'};
 const TIMELINE_REFERENCE_MS=120_000;
 const EMPTY_ARC_COLOR='#e6e3ef';
 let timelineFinishedAt=null;
@@ -98,7 +98,8 @@ function paintOverview(finished,total){
   const now=timelineFinishedAt??wall;
   const elapsed=Math.max(0,now-sim.startedAt);
   const fill=timelineFinishedAt!==null?100:Math.min(98,elapsed/TIMELINE_REFERENCE_MS*100);
-  const mode=sim.operatingMode;
+  const transitions=sim.timelineTransitions(now);
+  const mode=transitions.at(-1).mode;
   const overview=$('overview-mode');
   overview.dataset.mode=mode;
   set('overview-mode',paused?'일시정지':modes[mode]);
@@ -108,7 +109,6 @@ function paintOverview(finished,total){
   set('shipment-count',`${finished} / ${total}개 상차 완료`);
   set('run-elapsed',elapsedLabel(elapsed));
   const timeline=$('mode-timeline');
-  const transitions=[{now:sim.startedAt,mode:'online'},...sim.specialEvents.filter(event=>event.mode&&event.now<=now)];
   if(timelineSession!==sim||timelineSize!==sim.specialEvents.length){
     timelineSession=sim;
     timelineSize=sim.specialEvents.length;
@@ -214,33 +214,6 @@ function paint(){
     :phase==='recovering'?recoveryStatus[sim.recoveryPhase]:INCIDENTS[phase];
   const jobs=[...sim.jobs.values()],finished=jobs.filter(job=>job.stage===STAGES.length&&!job.auditHold).length;
   paintOverview(finished,jobs.length);
-  const drop=sim.dropIncident;
-  const dropLabels={
-    isolated:['AM 박스 낙하 · 통행 제한','해당 로봇은 정지하고 주변 로봇은 낙하 지점 주변의 점유 칸을 피합니다.'],
-    inspection:['현장 확인 · 재스캔','담당자가 모의 점검을 하고 재적재 전 상자 코드·수량·도크를 확인합니다.'],
-    held:['확인 보류 · 격리 유지','대조 결과가 일치하지 않아 해당 상자와 낙하 구역을 보류합니다.'],
-    resumed:['낙하 대응 완료 · 운반 재개','재스캔 일치와 담당자 모의 승인 후 같은 상자의 운반을 이어갑니다.'],
-  };
-  const dropStatus=$('drop-status');
-
-  if(drop&&dropStatus.dataset.phase!==drop.phase){
-    dropStatus.dataset.phase=drop.phase;
-    const [heading,detail]=dropLabels[drop.phase];
-    set('drop-title',heading);
-    set('drop-detail',`${drop.robotId} · ${drop.taskId} · (${drop.point.join(', ')}) — ${detail}`);
-  }
-  if(!drop&&dropStatus.dataset.phase!=='waiting'){
-    dropStatus.dataset.phase='waiting';
-    set('drop-title','낙하 발생 대기');
-    set('drop-detail','박스 낙하 시 발생 위치와 대응 단계를 표시합니다.');
-  }
-  const currentDropStep=drop?({isolated:0,inspection:1,held:1,resumed:2}[drop.phase]):-1;
-  ['drop-step-isolate','drop-step-inspect','drop-step-resume'].forEach((id,index)=>{
-    const step=$(id);
-    step.dataset.state=index<currentDropStep||drop?.phase==='resumed'?'done':index===currentDropStep?'active':'waiting';
-    if(index===currentDropStep)step.setAttribute('aria-current','step');
-    else step.removeAttribute('aria-current');
-  });
   paintPositionComparison();
   const connection=$('connection');
   $('mode').dataset.mode=sim.mode;

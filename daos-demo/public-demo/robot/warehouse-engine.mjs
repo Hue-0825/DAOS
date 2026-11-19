@@ -159,6 +159,20 @@ export class Warehouse {
     if(mode)this.operatingMode=mode;
   }
 
+  timelineTransitions(now=this.now) {
+    const transitions=[{now:this.startedAt,mode:'online'}];
+    let systemMode='online',dropActive=false;
+    for(const event of this.specialEvents){
+      if(event.now>now)continue;
+      if(event.mode)systemMode=event.mode;
+      if(event.kind==='drop'&&event.title==='AM 박스 낙하')dropActive=true;
+      if(event.kind==='drop'&&event.title==='낙하 대응 · 운반 재개')dropActive=false;
+      const mode=dropActive&&['online','backup'].includes(systemMode)?'drop':systemMode;
+      if(transitions.at(-1).mode!==mode)transitions.push({now:event.now,mode});
+    }
+    return transitions;
+  }
+
   sendBackup(now=Date.now(), log=true) {
     if (this.mode !== 'online') return false;
     this.backup = new Set([...this.jobs.values()].filter(job=>!job.auditHold&&job.stage<STAGES.length).map(job=>job.id));
